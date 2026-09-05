@@ -55,7 +55,7 @@ export const AllPatientsScreen: React.FC = () => {
       {/* Header */}
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.title}>👥 All Patients</Text>
+          <Text style={styles.title}>All Patients</Text>
           <Text style={styles.subtitle}>Patient Directory & Registration Desk</Text>
         </View>
         <TouchableOpacity style={styles.addBtn} onPress={() => setModalVisible(true)}>
@@ -82,7 +82,7 @@ export const AllPatientsScreen: React.FC = () => {
               <Text style={styles.nameText}>{item.name}</Text>
               <Text style={styles.idBadge}>{item.id}</Text>
             </View>
-            <Text style={styles.phoneText}>📞 {item.phone}</Text>
+            <Text style={styles.phoneText}>{item.phone}</Text>
             <View style={styles.footerRow}>
               <Text style={styles.subText}>{item.age} yrs • Last visit: {item.lastVisit}</Text>
               <TouchableOpacity style={styles.viewBtn}>

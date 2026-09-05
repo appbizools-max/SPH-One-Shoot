@@ -5,7 +5,7 @@ export const MediaManagerScreen: React.FC = () => {
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
       <View style={styles.header}>
-        <Text style={styles.title}>🖼️ Media Manager</Text>
+        <Text style={styles.title}>Media Manager</Text>
         <Text style={styles.subtitle}>Patient reports, X-rays & medical scans</Text>
       </View>
 

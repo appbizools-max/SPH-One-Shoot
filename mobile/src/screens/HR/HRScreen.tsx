@@ -6,10 +6,10 @@ export const HRScreen: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'attendance' | 'roster' | 'targets' | 'payroll'>('attendance');
 
   const [staffList, setStaffList] = useState([
-    { id: '1', name: 'Anil Kumar M', role: 'Receptionist', branch: 'KPHB', hours: '8.5 hrs', status: 'Present' },
-    { id: '2', name: 'Ashwini Begari', role: 'Front Desk', branch: 'Chandanagar', hours: '8.0 hrs', status: 'Present' },
-    { id: '3', name: 'Vaishnavi Peri', role: 'Manager', branch: 'Nallagandla', hours: '8.5 hrs', status: 'Present' },
-    { id: '4', name: 'Nandini Gottelli', role: 'Chemist', branch: 'Dilshuknagar', hours: '0.0 hrs', status: 'On Leave' },
+    { id: '1', name: 'Anil Kumar M', role: 'Regular Staff', branch: 'KPHB', hours: '8.5 hrs', status: 'Present' },
+    { id: '2', name: 'Ashwini Begari', role: 'Regular Staff', branch: 'Chandanagar', hours: '8.0 hrs', status: 'Present' },
+    { id: '3', name: 'Vaishnavi Peri', role: 'Regular Staff', branch: 'Nallagandla', hours: '8.5 hrs', status: 'Present' },
+    { id: '4', name: 'Nandini Gottelli', role: 'Regular Staff', branch: 'Dilshuknagar', hours: '0.0 hrs', status: 'On Leave' },
   ]);
 
   const toggleAttendance = (id: string) => {
@@ -36,27 +36,25 @@ export const HRScreen: React.FC = () => {
         </View>
       </View>
 
-      {/* Tabs */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          {[
-            { id: 'attendance', label: '📅 Attendance' },
-            { id: 'roster', label: '⏰ Shift Roster' },
-            { id: 'targets', label: '🎯 Branch Targets' },
-            { id: 'payroll', label: '💰 Staff Payroll' },
-          ].map(tab => (
-            <TouchableOpacity
-              key={tab.id}
-              style={[styles.tabChip, activeTab === tab.id && styles.tabChipActive]}
-              onPress={() => setActiveTab(tab.id as any)}
-            >
-              <Text style={[styles.tabChipText, activeTab === tab.id && styles.tabChipTextActive]}>
-                {tab.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </ScrollView>
+      {/* Tabs (Wrapped, No Side Scrolling) */}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+        {[
+          { id: 'attendance', label: 'Attendance' },
+          { id: 'roster', label: 'Shift Roster' },
+          { id: 'targets', label: 'Branch Targets' },
+          { id: 'payroll', label: 'Staff Payroll' },
+        ].map(tab => (
+          <TouchableOpacity
+            key={tab.id}
+            style={[styles.tabChip, activeTab === tab.id && styles.tabChipActive]}
+            onPress={() => setActiveTab(tab.id as any)}
+          >
+            <Text style={[styles.tabChipText, activeTab === tab.id && styles.tabChipTextActive]}>
+              {tab.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
 
       {/* TAB 1: ATTENDANCE */}
       {activeTab === 'attendance' && (
@@ -70,7 +68,7 @@ export const HRScreen: React.FC = () => {
                 <View>
                   <Text style={styles.cardTitle}>{stf.name}</Text>
                   <Text style={{ fontSize: 12, color: '#64748b' }}>{stf.role} • {stf.branch}</Text>
-                  <Text style={{ fontSize: 12, color: '#16a34a', fontWeight: '700', marginTop: 4 }}>⏱️ {stf.hours}</Text>
+                  <Text style={{ fontSize: 12, color: '#a8ce3a', fontWeight: '700', marginTop: 4 }}>Hours: {stf.hours}</Text>
                 </View>
 
                 <TouchableOpacity 
@@ -97,12 +95,12 @@ export const HRScreen: React.FC = () => {
       {activeTab === 'roster' && (
         <View style={{ gap: 10 }}>
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>☀️ Morning Shift (10:00 AM - 02:00 PM)</Text>
+            <Text style={styles.cardTitle}>Morning Shift (10:00 AM - 02:00 PM)</Text>
             <Text style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>Anil Kumar M, Vaishnavi Peri, Arun Kumar</Text>
           </View>
 
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>🌙 Evening Shift (03:00 PM - 08:30 PM)</Text>
+            <Text style={styles.cardTitle}>Evening Shift (03:00 PM - 08:30 PM)</Text>
             <Text style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>Ashwini Begari, Nandini Gottelli</Text>
           </View>
         </View>
@@ -127,11 +125,11 @@ export const HRScreen: React.FC = () => {
         <View style={{ gap: 10 }}>
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Anil Kumar M - KPHB</Text>
-            <Text style={{ fontSize: 13, fontWeight: '800', color: '#16a34a', marginTop: 2 }}>Base Salary: ₹22,000 (Processed)</Text>
+            <Text style={{ fontSize: 13, fontWeight: '800', color: '#a8ce3a', marginTop: 2 }}>Base Salary: ₹22,000 (Processed)</Text>
           </View>
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Ashwini Begari - Chandanagar</Text>
-            <Text style={{ fontSize: 13, fontWeight: '800', color: '#16a34a', marginTop: 2 }}>Base Salary: ₹17,000 (Processed)</Text>
+            <Text style={{ fontSize: 13, fontWeight: '800', color: '#a8ce3a', marginTop: 2 }}>Base Salary: ₹17,000 (Processed)</Text>
           </View>
         </View>
       )}
@@ -143,21 +141,21 @@ export const HRScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8fafc', paddingHorizontal: 16, paddingTop: 12 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 },
-  iconCircle: { width: 44, height: 44, borderRadius: 14, backgroundColor: '#8b5cf6', alignItems: 'center', justifyContent: 'center' },
+  iconCircle: { width: 44, height: 44, borderRadius: 14, backgroundColor: '#258ec8', alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 18, fontWeight: '800', color: '#0f172a' },
   headerSub: { fontSize: 11.5, color: '#64748b' },
   tabChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0' },
-  tabChipActive: { backgroundColor: '#8b5cf6', borderColor: '#8b5cf6' },
+  tabChipActive: { backgroundColor: '#258ec8', borderColor: '#258ec8' },
   tabChipText: { fontSize: 12, fontWeight: '600', color: '#64748b' },
   tabChipTextActive: { color: '#ffffff', fontWeight: '800' },
   card: { backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 16, padding: 16 },
   cardTitle: { fontSize: 15, fontWeight: '800', color: '#0f172a' },
   badge: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
-  bgGreen: { backgroundColor: '#f0fdf4' },
-  bgRed: { backgroundColor: '#fef2f2' },
-  bgYellow: { backgroundColor: '#fefce8' },
+  bgGreen: { backgroundColor: '#f4f9e8' },
+  bgRed: { backgroundColor: '#eef5fc' },
+  bgYellow: { backgroundColor: '#f8fafc' },
   badgeText: { fontSize: 11.5, fontWeight: '800' },
-  textGreen: { color: '#16a34a' },
-  textRed: { color: '#ef4444' },
-  textYellow: { color: '#ca8a04' },
+  textGreen: { color: '#a8ce3a' },
+  textRed: { color: '#258ec8' },
+  textYellow: { color: '#64748b' },
 });

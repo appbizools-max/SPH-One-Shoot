@@ -5,7 +5,7 @@ export const AnalyticsRevenuePage: React.FC = () => {
   return (
     <div style={{ padding: '24px 20px', maxWidth: '1000px', margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
-        <DollarSign size={24} color="#3b82f6" />
+        <DollarSign size={24} color="#258ec8" />
         <h1 style={{ fontSize: '18px !important', fontWeight: 800, color: '#0f172a' }}>
           Average Analytics & Total Revenue
         </h1>

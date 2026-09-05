@@ -5,7 +5,7 @@ export const DoctorNoShowScreen: React.FC = () => {
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
       <View style={styles.header}>
-        <Text style={styles.title}>🚫 Doctor No Show</Text>
+        <Text style={styles.title}>Doctor No Show</Text>
         <Text style={styles.subtitle}>Doctor absences & slot rescheduling alerts</Text>
       </View>
 

@@ -11,7 +11,7 @@ export const BranchTargetHRScreen: React.FC = () => {
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <Text style={styles.title}>🎯 HR Branch Target Management</Text>
+      <Text style={styles.title}>HR Branch Target Management</Text>
       <Text style={styles.subTitle}>Branch revenue performance and staff targets.</Text>
 
       {branchTargets.map(b => (
@@ -32,5 +32,5 @@ const styles = StyleSheet.create({
   card: { backgroundColor: '#ffffff', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#e2e8f0', marginBottom: 10 },
   cardTitle: { fontSize: 14.5, fontWeight: '800', color: '#0f172a' },
   cardSub: { fontSize: 12, color: '#64748b', marginTop: 4 },
-  cardStatus: { fontSize: 12, fontWeight: '700', color: '#8b5cf6', marginTop: 4 },
+  cardStatus: { fontSize: 12, fontWeight: '700', color: '#258ec8', marginTop: 4 },
 });

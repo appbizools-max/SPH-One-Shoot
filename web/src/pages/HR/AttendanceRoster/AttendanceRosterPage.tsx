@@ -3,10 +3,10 @@ import { UserCheck } from 'lucide-react';
 
 export const AttendanceRosterPage: React.FC = () => {
   const [staffList, setStaffList] = useState([
-    { id: '1', name: 'Anil Kumar M', role: 'Receptionist', branch: 'KPHB', status: 'Present' },
-    { id: '2', name: 'Ashwini Begari', role: 'Front Desk', branch: 'Chandanagar', status: 'Present' },
-    { id: '3', name: 'Vaishnavi Peri', role: 'Manager', branch: 'Nallagandla', status: 'Present' },
-    { id: '4', name: 'Nandini Gottelli', role: 'Chemist', branch: 'Dilshuknagar', status: 'On Leave' },
+    { id: '1', name: 'Anil Kumar M', role: 'Regular Staff', branch: 'KPHB', status: 'Present' },
+    { id: '2', name: 'Ashwini Begari', role: 'Regular Staff', branch: 'Chandanagar', status: 'Present' },
+    { id: '3', name: 'Vaishnavi Peri', role: 'Regular Staff', branch: 'Nallagandla', status: 'Present' },
+    { id: '4', name: 'Nandini Gottelli', role: 'Regular Staff', branch: 'Dilshuknagar', status: 'On Leave' },
   ]);
 
   const toggleAttendance = (id: string) => {
@@ -22,7 +22,7 @@ export const AttendanceRosterPage: React.FC = () => {
   return (
     <div style={{ padding: '24px 20px', maxWidth: '1000px', margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
-        <UserCheck size={24} color="#8b5cf6" />
+        <UserCheck size={24} color="#258ec8" />
         <h1 style={{ fontSize: '18px !important', fontWeight: 800, color: '#0f172a' }}>
           Daily Staff Attendance & Roster Log
         </h1>

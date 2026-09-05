@@ -11,7 +11,7 @@ export const PayrollSalaryScreen: React.FC = () => {
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <Text style={styles.title}>💰 Staff Payroll & Base Salaries</Text>
+      <Text style={styles.title}>Staff Payroll & Base Salaries</Text>
       <Text style={styles.subTitle}>Monthly compensation and payout status.</Text>
 
       {payrollList.map(p => (
@@ -35,6 +35,6 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: 14.5, fontWeight: '800', color: '#0f172a' },
   cardSalary: { fontSize: 13, fontWeight: '800', color: '#0f172a', marginTop: 4 },
   cardStatus: { fontSize: 11.5, fontWeight: '800', marginTop: 4 },
-  statusGreen: { color: '#16a34a' },
-  statusRed: { color: '#ef4444' },
+  statusGreen: { color: '#a8ce3a' },
+  statusRed: { color: '#258ec8' },
 });

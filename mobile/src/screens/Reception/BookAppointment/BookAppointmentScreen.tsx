@@ -122,7 +122,7 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
         createdAt: new Date().toISOString(),
       });
 
-      Alert.alert('Success 🎉', `Appointment Booked Successfully for ${patientName}!`);
+      Alert.alert('Success', `Appointment Booked Successfully for ${patientName}!`);
 
       // Reset
       setPatientName('');
@@ -271,7 +271,7 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
                       style={styles.floatingOption} 
                       onPress={() => { setMarketingSource(src); setMarketingExpanded(false); }}
                     >
-                      <Text style={[styles.floatingOptionText, marketingSource === src && { color: '#3b82f6', fontWeight: '800' }]}>
+                      <Text style={[styles.floatingOptionText, marketingSource === src && { color: '#258ec8', fontWeight: '800' }]}>
                         {src}
                       </Text>
                     </TouchableOpacity>
@@ -308,7 +308,7 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
                     style={styles.floatingOption} 
                     onPress={() => { setConsultationMode(mode as any); setModeExpanded(false); }}
                   >
-                    <Text style={[styles.floatingOptionText, consultationMode === mode && { color: '#3b82f6', fontWeight: '800' }]}>
+                    <Text style={[styles.floatingOptionText, consultationMode === mode && { color: '#258ec8', fontWeight: '800' }]}>
                       {mode}
                     </Text>
                   </TouchableOpacity>
@@ -343,9 +343,9 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
           onPress={() => setCalendarModalOpen(true)}
           activeOpacity={0.85}
         >
-          <Ionicons name="calendar-outline" size={18} color="#3b82f6" style={{ marginRight: 10 }} />
+          <Ionicons name="calendar-outline" size={18} color="#258ec8" style={{ marginRight: 10 }} />
           <Text style={styles.inputTextDate}>{appointmentDate}</Text>
-          <Ionicons name="calendar-outline" size={18} color="#3b82f6" />
+          <Ionicons name="calendar-outline" size={18} color="#258ec8" />
         </TouchableOpacity>
 
         {/* 3. Select Doctor Field */}
@@ -384,7 +384,7 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
                     style={styles.floatingOption} 
                     onPress={() => { setSelectedDoctor(doc); setDoctorExpanded(false); }}
                   >
-                    <Text style={[styles.floatingOptionText, selectedDoctor === doc && { color: '#3b82f6', fontWeight: '800' }]}>
+                    <Text style={[styles.floatingOptionText, selectedDoctor === doc && { color: '#258ec8', fontWeight: '800' }]}>
                       {doc}
                     </Text>
                   </TouchableOpacity>
@@ -397,7 +397,7 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
         {/* 4. Available Slots Section */}
         <View style={{ marginTop: 14 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-            <Ionicons name="time-outline" size={18} color="#3b82f6" />
+            <Ionicons name="time-outline" size={18} color="#258ec8" />
             <Text style={{ fontSize: 13, fontWeight: '800', color: '#0f172a' }}>Available Slots</Text>
           </View>
 
@@ -460,7 +460,7 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
             {/* Calendar Header with Month/Year Navigation Arrows */}
             <View style={styles.calendarHeader}>
               <TouchableOpacity onPress={handlePrevMonth} style={styles.monthNavBtn}>
-                <Feather name="chevron-left" size={20} color="#3b82f6" />
+                <Feather name="chevron-left" size={20} color="#258ec8" />
               </TouchableOpacity>
 
               <Text style={styles.calendarHeaderTitle}>
@@ -468,7 +468,7 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
               </Text>
 
               <TouchableOpacity onPress={handleNextMonth} style={styles.monthNavBtn}>
-                <Feather name="chevron-right" size={20} color="#3b82f6" />
+                <Feather name="chevron-right" size={20} color="#258ec8" />
               </TouchableOpacity>
             </View>
 
@@ -565,7 +565,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 9,
-    backgroundColor: '#3b82f6',
+    backgroundColor: '#258ec8',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -638,7 +638,7 @@ const styles = StyleSheet.create({
   fixedLockBadgeText: {
     fontSize: 9.5,
     fontWeight: '800',
-    color: '#0284c7',
+    color: '#258ec8',
   },
   inputText: {
     fontSize: 12.5,
@@ -666,7 +666,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#ffffff',
     borderWidth: 1.5,
-    borderColor: '#3b82f6',
+    borderColor: '#258ec8',
     borderRadius: 12,
     paddingHorizontal: 14,
     height: 48,
@@ -737,8 +737,8 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
   },
   slotChipSelected: {
-    backgroundColor: '#3b82f6',
-    borderColor: '#3b82f6',
+    backgroundColor: '#258ec8',
+    borderColor: '#258ec8',
   },
   slotChipText: {
     fontSize: 11,
@@ -750,14 +750,14 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   confirmBtn: {
-    backgroundColor: '#3b82f6',
+    backgroundColor: '#258ec8',
     borderRadius: 16,
     height: 52,
     paddingHorizontal: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    shadowColor: '#3b82f6',
+    shadowColor: '#258ec8',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,
     shadowRadius: 8,
@@ -838,7 +838,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   dayCellSelected: {
-    backgroundColor: '#3b82f6',
+    backgroundColor: '#258ec8',
   },
   dayCellText: {
     fontSize: 12.5,

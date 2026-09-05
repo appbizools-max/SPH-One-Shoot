@@ -5,7 +5,7 @@ export const ProductBillingScreen: React.FC = () => {
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
       <View style={styles.header}>
-        <Text style={styles.title}>💳 Product Billing</Text>
+        <Text style={styles.title}>Product Billing</Text>
         <Text style={styles.subtitle}>Invoices, consultation fees & receipts</Text>
       </View>
 

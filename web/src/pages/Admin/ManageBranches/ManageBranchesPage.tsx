@@ -12,7 +12,7 @@ export const ManageBranchesPage: React.FC = () => {
   return (
     <div style={{ padding: '24px 20px', maxWidth: '1000px', margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
-        <Building2 size={24} color="#3b82f6" />
+        <Building2 size={24} color="#258ec8" />
         <h1 style={{ fontSize: '18px !important', fontWeight: 800, color: '#0f172a' }}>
           Manage Branches & Target Management
         </h1>
@@ -24,7 +24,7 @@ export const ManageBranchesPage: React.FC = () => {
             <h3 style={{ fontSize: '14.5px !important', fontWeight: 800, color: '#0f172a' }}>{b.name}</h3>
             <p style={{ fontSize: '12px !important', color: '#64748b', margin: '4px 0 10px' }}>📞 {b.phone}</p>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px !important' }}>
-              <span>Target: <b style={{ color: '#3b82f6' }}>{b.target}</b></span>
+              <span>Target: <b style={{ color: '#258ec8' }}>{b.target}</b></span>
               <span>Achieved: <b style={{ color: '#16a34a' }}>{b.achieved}</b></span>
             </div>
           </div>

@@ -57,7 +57,7 @@ export const RemediesScreen: React.FC = () => {
             <Text style={styles.desc}>{item.description}</Text>
             {item.spiritualInsight && (
               <View style={styles.insightBox}>
-                <Text style={styles.insightTitle}>✨ Spiritual Insight</Text>
+                <Text style={styles.insightTitle}>Spiritual Insight</Text>
                 <Text style={styles.insightText}>{item.spiritualInsight}</Text>
               </View>
             )}
@@ -71,31 +71,32 @@ export const RemediesScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#f8fafc',
     paddingHorizontal: 20,
   },
   title: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#f8fafc',
+    color: '#0f172a',
     marginVertical: 12,
   },
   input: {
-    backgroundColor: 'rgba(15, 23, 42, 0.8)',
+    backgroundColor: '#ffffff',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: '#cbd5e1',
     borderRadius: 10,
-    color: '#ffffff',
+    color: '#0f172a',
     padding: 12,
     fontSize: 14,
     marginBottom: 16,
   },
   card: {
-    backgroundColor: 'rgba(30, 41, 59, 0.7)',
+    backgroundColor: '#ffffff',
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: '#e2e8f0',
   },
   headerRow: {
     flexDirection: 'row',
@@ -105,13 +106,13 @@ const styles = StyleSheet.create({
   remedyName: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#38bdf8',
+    color: '#258ec8',
   },
   badge: {
-    color: '#34d399',
+    color: '#a8ce3a',
     fontSize: 12,
     fontWeight: '600',
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    backgroundColor: '#f4f9e8',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
@@ -119,29 +120,29 @@ const styles = StyleSheet.create({
   latin: {
     fontSize: 12,
     fontStyle: 'italic',
-    color: '#94a3b8',
+    color: '#64748b',
     marginBottom: 6,
   },
   desc: {
     fontSize: 13,
-    color: '#cbd5e1',
+    color: '#475569',
     lineHeight: 18,
     marginBottom: 8,
   },
   insightBox: {
-    backgroundColor: 'rgba(139, 92, 246, 0.15)',
+    backgroundColor: '#eef5fc',
     padding: 10,
     borderRadius: 8,
     marginTop: 6,
   },
   insightTitle: {
-    color: '#c084fc',
+    color: '#258ec8',
     fontSize: 12,
     fontWeight: '700',
     marginBottom: 2,
   },
   insightText: {
-    color: '#e9d5ff',
+    color: '#475569',
     fontSize: 12,
   },
 });

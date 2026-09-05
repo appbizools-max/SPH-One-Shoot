@@ -11,15 +11,15 @@ export const BranchTargetsScreen: React.FC = () => {
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <Text style={styles.title}>🎯 Branch Target Management</Text>
+      <Text style={styles.title}>Branch Target Management</Text>
       <Text style={styles.subTitle}>Monthly revenue targets and branch progress.</Text>
 
       {branchTargets.map(b => (
         <View key={b.name} style={styles.card}>
           <Text style={styles.cardTitle}>{b.name}</Text>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 }}>
-            <Text style={styles.infoText}>Target: <Text style={{ fontWeight: '800', color: '#3b82f6' }}>{b.target}</Text></Text>
-            <Text style={styles.infoText}>Achieved: <Text style={{ fontWeight: '800', color: '#16a34a' }}>{b.current}</Text></Text>
+            <Text style={styles.infoText}>Target: <Text style={{ fontWeight: '800', color: '#258ec8' }}>{b.target}</Text></Text>
+            <Text style={styles.infoText}>Achieved: <Text style={{ fontWeight: '800', color: '#a8ce3a' }}>{b.current}</Text></Text>
           </View>
         </View>
       ))}

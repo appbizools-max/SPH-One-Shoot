@@ -6,13 +6,13 @@ export const DashboardScreen: React.FC = () => {
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       <View style={styles.headerRow}>
-        <MaterialCommunityIcons name="view-dashboard" size={24} color="#3b82f6" />
+        <MaterialCommunityIcons name="view-dashboard" size={24} color="#258ec8" />
         <Text style={styles.title}>Admin Overview Dashboard</Text>
       </View>
       <Text style={styles.subTitle}>Live clinic operations & high-level system summary.</Text>
 
       <View style={styles.card}>
-        <Text style={styles.cardHeader}>📊 Quick Metrics</Text>
+        <Text style={styles.cardHeader}>Quick Metrics</Text>
         <Text style={styles.statText}>Total Revenue: ₹36,90,000</Text>
         <Text style={styles.statText}>Active Branches: 4 Official</Text>
         <Text style={styles.statText}>Global Patients: 1,250 Registered</Text>

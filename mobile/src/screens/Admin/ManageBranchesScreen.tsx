@@ -12,13 +12,13 @@ export const ManageBranchesScreen: React.FC = () => {
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <Text style={styles.title}>🏢 Manage Official Branches</Text>
+      <Text style={styles.title}>Manage Official Branches</Text>
       <Text style={styles.subTitle}>Configured receptionist phone lines and targets.</Text>
 
       {branches.map(b => (
         <View key={b.name} style={styles.card}>
           <Text style={styles.cardTitle}>{b.name}</Text>
-          <Text style={styles.cardPhone}>📞 {b.phone}</Text>
+          <Text style={styles.cardPhone}>Contact: {b.phone}</Text>
           <Text style={styles.cardTarget}>Target: {b.target}</Text>
         </View>
       ))}
@@ -33,5 +33,5 @@ const styles = StyleSheet.create({
   card: { backgroundColor: '#ffffff', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#e2e8f0', marginBottom: 10 },
   cardTitle: { fontSize: 14.5, fontWeight: '800', color: '#0f172a' },
   cardPhone: { fontSize: 12, color: '#64748b', marginTop: 4 },
-  cardTarget: { fontSize: 12.5, fontWeight: '700', color: '#3b82f6', marginTop: 4 },
+  cardTarget: { fontSize: 12.5, fontWeight: '700', color: '#258ec8', marginTop: 4 },
 });

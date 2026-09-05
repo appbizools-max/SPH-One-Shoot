@@ -12,7 +12,7 @@ export const BranchTargetsPage: React.FC = () => {
   return (
     <div style={{ padding: '24px 20px', maxWidth: '1000px', margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
-        <Target size={24} color="#3b82f6" />
+        <Target size={24} color="#258ec8" />
         <h1 style={{ fontSize: '18px !important', fontWeight: 800, color: '#0f172a' }}>
           Branch Target Management
         </h1>
@@ -23,7 +23,7 @@ export const BranchTargetsPage: React.FC = () => {
           <div key={b.name} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '18px' }}>
             <h3 style={{ fontSize: '14.5px !important', fontWeight: 800, color: '#0f172a' }}>{b.name}</h3>
             <p style={{ fontSize: '12px !important', color: '#64748b', margin: '4px 0' }}>Target: <b>{b.target}</b> | Achieved: <b style={{ color: '#16a34a' }}>{b.current}</b></p>
-            <span style={{ fontSize: '11px !important', fontWeight: 700, color: '#8b5cf6' }}>{b.status}</span>
+            <span style={{ fontSize: '11px !important', fontWeight: 700, color: '#258ec8' }}>{b.status}</span>
           </div>
         ))}
       </div>

@@ -34,7 +34,7 @@ export default function App() {
     try {
       const saved = localStorage.getItem(AUTH_STORAGE_KEY);
       if (saved) return JSON.parse(saved);
-    } catch (e) {}
+    } catch (e) { }
     return null;
   });
 
@@ -49,7 +49,7 @@ export default function App() {
         if (parsed?.role === 'staff') return 'staff';
         return 'reception_dashboard';
       }
-    } catch (e) {}
+    } catch (e) { }
     return 'auth';
   });
 
@@ -64,7 +64,7 @@ export default function App() {
     };
     try {
       localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(sessionData));
-    } catch (e) {}
+    } catch (e) { }
 
     setAuthSession(sessionData);
     setBranchName(data.branchName);
@@ -72,24 +72,35 @@ export default function App() {
 
     if (data.role === 'admin') {
       setActiveTab('admin');
+      const curPath = window.location.pathname.toLowerCase();
+      if (curPath === '/login' || curPath === '/' || curPath === '/auth') {
+        window.history.pushState({}, '', '/dashboard');
+      }
     } else if (data.role === 'hr') {
       setActiveTab('hr');
+      window.history.pushState({}, '', '/hr');
     } else if (data.role === 'doctor') {
       setActiveTab('doctor');
+      window.history.pushState({}, '', '/doctor');
     } else if (data.role === 'staff') {
       setActiveTab('staff');
+      window.history.pushState({}, '', '/staff');
     } else {
       setActiveTab('reception_dashboard');
+      window.history.pushState({}, '', '/reception');
     }
   };
 
   const handleLogout = async () => {
     try {
       localStorage.removeItem(AUTH_STORAGE_KEY);
-    } catch (e) {}
+    } catch (e) { }
     await signOutUser();
     setAuthSession(null);
     setActiveTab('auth');
+    if (window.location.pathname !== '/login') {
+      window.history.pushState({}, '', '/login');
+    }
   };
 
   // Sync tab navigation with logout
@@ -128,7 +139,38 @@ export default function App() {
     }
   };
 
+  const userRole = authSession?.role;
+
+  // Route guard to ensure Admin, HR, Doctor and Staff stay inside their dedicated portals
+  useEffect(() => {
+    if (userRole === 'admin' && activeTab !== 'admin') {
+      setActiveTab('admin');
+    } else if (userRole === 'hr' && activeTab !== 'hr') {
+      setActiveTab('hr');
+    } else if (userRole === 'doctor' && activeTab !== 'doctor') {
+      setActiveTab('doctor');
+    } else if (userRole === 'staff' && activeTab !== 'staff') {
+      setActiveTab('staff');
+    }
+  }, [userRole, activeTab]);
+
   const renderCurrentPage = () => {
+    if (userRole === 'admin') {
+      return <AdminDashboardPage />;
+    }
+
+    if (userRole === 'hr') {
+      return <HRDashboardPage />;
+    }
+
+    if (userRole === 'doctor') {
+      return <DoctorDashboardPage />;
+    }
+
+    if (userRole === 'staff') {
+      return <StaffDashboardPage />;
+    }
+
     if (isReceptionRoute) {
       return (
         <ReceptionLayout activeTab={activeTab} setActiveTab={setActiveTab}>
@@ -148,17 +190,6 @@ export default function App() {
         return <ConsultationPage />;
       case 'profile':
         return <ProfilePage />;
-
-      // Other Roles
-      case 'admin':
-        return <AdminDashboardPage />;
-      case 'doctor':
-        return <DoctorDashboardPage />;
-      case 'staff':
-        return <StaffDashboardPage />;
-      case 'hr':
-        return <HRDashboardPage />;
-
       default:
         return <AuthPage onLoginSuccess={handleLoginSuccess} />;
     }
@@ -168,15 +199,15 @@ export default function App() {
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: '#f8fafc' }}>
       {/* Hide navbar on Login page */}
       {!isAuthPage && (
-        <Navbar 
-          activeTab={activeTab} 
+        <Navbar
+          activeTab={activeTab}
           setActiveTab={(tab) => {
             if (tab === 'auth') {
               handleLogout();
             } else {
               setActiveTab(tab);
             }
-          }} 
+          }}
           branchName={branchName}
           branchPhone={branchPhone}
           role={authSession?.role}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, SafeAreaView, TouchableOpacity, Platform, Alert } from 'react-native';
+import { StyleSheet, Text, View, SafeAreaView, TouchableOpacity, Platform, Alert, BackHandler } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -19,9 +19,11 @@ import { DoctorNoShowScreen } from './src/screens/Reception/DoctorNoShow/DoctorN
 import { MediaManagerScreen } from './src/screens/Reception/MediaManager/MediaManagerScreen';
 import { CleaningPhotosScreen } from './src/screens/Reception/CleaningPhotos/CleaningPhotosScreen';
 
-// Admin & HR Screens
+// Admin, HR, Doctor & Staff Screens
 import { AdminScreen } from './src/screens/Admin/AdminScreen';
 import { HRScreen } from './src/screens/HR/HRScreen';
+import { DoctorScreen } from './src/screens/Doctor/DoctorScreen';
+import { StaffScreen } from './src/screens/Staff/StaffScreen';
 
 import { UserRole, signOutUser } from '@app/shared';
 
@@ -29,13 +31,45 @@ const MOBILE_AUTH_KEY = '@sph_auth_session';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<string>('auth');
+  const [tabHistory, setTabHistory] = useState<string[]>([]);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [userRole, setUserRole] = useState<UserRole>('reception');
-  
+
   // Authenticated User Branch State (Branch-Locked)
   const [branchName, setBranchName] = useState('Nallagandla');
   const [branchPhone, setBranchPhone] = useState('9553176176');
   const [isLoadingSession, setIsLoadingSession] = useState(true);
+
+  // Navigation Stack Helper
+  const navigateToTab = (newTab: string) => {
+    if (newTab === activeTab) return;
+    setTabHistory(prev => [...prev, activeTab]);
+    setActiveTab(newTab);
+  };
+
+  const handleGoBack = (): boolean => {
+    if (tabHistory.length > 0) {
+      const prevTab = tabHistory[tabHistory.length - 1];
+      setTabHistory(prev => prev.slice(0, -1));
+      setActiveTab(prevTab);
+      return true;
+    } else if (activeTab !== 'reception_dashboard' && activeTab !== 'reception' && activeTab !== 'admin' && activeTab !== 'auth') {
+      const defaultHome = userRole === 'admin' ? 'admin' : userRole === 'doctor' ? 'doctor' : userRole === 'staff' ? 'staff' : 'reception_dashboard';
+      setActiveTab(defaultHome);
+      return true;
+    }
+    return false;
+  };
+
+  // Hardware Back Button Listener (Native Android Back Press)
+  useEffect(() => {
+    const onHardwareBackPress = () => {
+      return handleGoBack();
+    };
+
+    const subscription = BackHandler.addEventListener('hardwareBackPress', onHardwareBackPress);
+    return () => subscription.remove();
+  }, [tabHistory, activeTab, userRole]);
 
   // Restore saved session on app startup
   useEffect(() => {
@@ -52,6 +86,10 @@ export default function App() {
               setActiveTab('admin');
             } else if (parsed.role === 'hr') {
               setActiveTab('hr');
+            } else if (parsed.role === 'doctor') {
+              setActiveTab('doctor');
+            } else if (parsed.role === 'staff') {
+              setActiveTab('staff');
             } else {
               setActiveTab('reception_dashboard');
             }
@@ -73,16 +111,21 @@ export default function App() {
         branchName: data.branchName,
         branchPhone: data.branchPhone,
       }));
-    } catch (e) {}
+    } catch (e) { }
 
     setUserRole(data.role);
     setBranchName(data.branchName);
     setBranchPhone(data.branchPhone);
+    setTabHistory([]);
 
     if (data.role === 'admin') {
       setActiveTab('admin');
     } else if (data.role === 'hr') {
       setActiveTab('hr');
+    } else if (data.role === 'doctor') {
+      setActiveTab('doctor');
+    } else if (data.role === 'staff') {
+      setActiveTab('staff');
     } else {
       setActiveTab('reception_dashboard');
     }
@@ -91,8 +134,9 @@ export default function App() {
   const handleSignOut = async () => {
     try {
       await AsyncStorage.removeItem(MOBILE_AUTH_KEY);
-    } catch (e) {}
+    } catch (e) { }
     await signOutUser();
+    setTabHistory([]);
     setActiveTab('auth');
     Alert.alert('Signed Out', 'You have been logged out of SPH Staff Portal.');
   };
@@ -100,20 +144,31 @@ export default function App() {
   const isAuthScreen = activeTab === 'auth';
 
   const renderScreen = () => {
+    if (activeTab === 'auth') {
+      return <AuthScreen onLoginSuccess={handleLoginSuccess} />;
+    }
+
+    if (userRole === 'admin') {
+      return <AdminScreen currentTab={activeTab} />;
+    }
+
+    if (userRole === 'hr') {
+      return <HRScreen />;
+    }
+
+    if (userRole === 'doctor') {
+      return <DoctorScreen />;
+    }
+
+    if (userRole === 'staff') {
+      return <StaffScreen />;
+    }
+
     switch (activeTab) {
-      case 'auth':
-        return <AuthScreen onLoginSuccess={handleLoginSuccess} />;
-
-      // Admin & HR Dashboards
-      case 'admin':
-        return <AdminScreen />;
-      case 'hr':
-        return <HRScreen />;
-
       // Reception Modules
       case 'reception':
       case 'reception_dashboard':
-        return <ReceptionDashboardScreen onNavigate={setActiveTab} />;
+        return <ReceptionDashboardScreen onNavigate={navigateToTab} />;
       case 'reception_book':
         return <BookAppointmentScreen currentBranch={branchName} />;
       case 'reception_patients':
@@ -136,14 +191,8 @@ export default function App() {
     }
   };
 
-  // Bottom Nav Items tailored per role
-  const bottomNavItems = userRole === 'admin' ? [
-    { id: 'admin', label: 'Admin Hub', iconType: 'ionicons', iconName: 'shield-outline' },
-    { id: 'logout', label: 'Logout', iconType: 'ionicons', iconName: 'log-out-outline' },
-  ] : userRole === 'hr' ? [
-    { id: 'hr', label: 'HR Hub', iconType: 'ionicons', iconName: 'people-outline' },
-    { id: 'logout', label: 'Logout', iconType: 'ionicons', iconName: 'log-out-outline' },
-  ] : [
+  // Bottom Nav Items: Dashboard, Book Appt, Patient List, Med Req, Logout
+  const bottomNavItems = [
     { id: 'reception_dashboard', label: 'Dashboard', iconType: 'ionicons', iconName: 'grid-outline' },
     { id: 'reception_book', label: 'Book Appt', iconType: 'ionicons', iconName: 'calendar-outline' },
     { id: 'reception_patients', label: 'Patient List', iconType: 'ionicons', iconName: 'people-outline' },
@@ -155,7 +204,7 @@ export default function App() {
     if (id === 'logout') {
       handleSignOut();
     } else {
-      setActiveTab(id);
+      navigateToTab(id);
     }
   };
 
@@ -170,56 +219,98 @@ export default function App() {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="dark" />
-      
-      {/* Top Header Bar Matching Screenshot */}
-      {!isAuthScreen && (
-        <View style={styles.topHeader}>
-          {/* Left Side: Hamburger Menu + Avatar Circle + Branch Info */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <TouchableOpacity style={styles.menuDrawerBtn} onPress={() => setDrawerOpen(true)}>
-              <Ionicons name="menu-outline" size={24} color="#0f172a" />
-            </TouchableOpacity>
 
-            <View style={styles.avatarCircle}>
-              <Ionicons name="person" size={20} color="#258ec8" />
+      {/* Top Header Bar */}
+      {!isAuthScreen && (
+        (activeTab === 'reception_dashboard' || activeTab === 'reception' || activeTab === 'admin') ? (
+          <View style={styles.topHeader}>
+            {/* Left Side: Hamburger Menu + Avatar Circle + Branch Info */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <TouchableOpacity style={styles.menuDrawerBtn} onPress={() => setDrawerOpen(true)}>
+                <Ionicons name="menu-outline" size={24} color="#0f172a" />
+              </TouchableOpacity>
+
+              <View style={styles.avatarCircle}>
+                <Ionicons name="person" size={20} color="#258ec8" />
+              </View>
+
+              {userRole === 'admin' ? (
+                <View>
+                  <Text style={styles.branchTitle}>Spiritual Homeo</Text>
+                  <View style={styles.tagRow}>
+                    <View style={styles.roleBadge}>
+                      <Text style={styles.roleBadgeText}>ADMIN</Text>
+                    </View>
+                  </View>
+                </View>
+              ) : (
+                <View>
+                  <Text style={styles.branchTitle}>{branchName}</Text>
+                  <Text style={styles.phoneSub}>{branchPhone}</Text>
+                  <View style={styles.tagRow}>
+                    <View style={styles.roleBadge}>
+                      <Text style={styles.roleBadgeText}>{(userRole || 'reception').toUpperCase()}</Text>
+                    </View>
+                    <View style={styles.locBadge}>
+                      <Ionicons name="location-outline" size={10} color="#64748b" style={{ marginRight: 2 }} />
+                      <Text style={styles.locBadgeText}>{branchName}</Text>
+                    </View>
+                  </View>
+                </View>
+              )}
             </View>
 
-            <View>
-              <Text style={styles.branchTitle}>{branchName}</Text>
-              <Text style={styles.phoneSub}>{branchPhone}</Text>
-              <View style={styles.tagRow}>
-                <View style={styles.roleBadge}>
-                  <Text style={styles.roleBadgeText}>{(userRole || 'reception').toUpperCase()}</Text>
-                </View>
-                <View style={styles.locBadge}>
-                  <Ionicons name="location-outline" size={10} color="#64748b" style={{ marginRight: 2 }} />
-                  <Text style={styles.locBadgeText}>{branchName}</Text>
-                </View>
-              </View>
+            {/* Right Side: Notification Bell + Red Logout Button */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <TouchableOpacity style={styles.bellBtn}>
+                <Ionicons name="notifications-outline" size={18} color="#1e293b" />
+                <View style={styles.redDot} />
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.signOutBtnCircle} onPress={handleSignOut}>
+                <Ionicons name="log-out-outline" size={18} color="#ef4444" />
+              </TouchableOpacity>
             </View>
           </View>
+        ) : (
+          <View style={styles.subPageHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <TouchableOpacity style={styles.headerBackBtn} onPress={handleGoBack}>
+                <Ionicons name="arrow-back" size={22} color="#0f172a" />
+              </TouchableOpacity>
 
-          {/* Right Side: Notification Bell + Red Logout Button */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <TouchableOpacity style={styles.bellBtn}>
-              <Ionicons name="notifications-outline" size={18} color="#1e293b" />
-              <View style={styles.redDot} />
-            </TouchableOpacity>
+              <TouchableOpacity style={styles.menuDrawerBtn} onPress={() => setDrawerOpen(true)}>
+                <Ionicons name="menu-outline" size={22} color="#475569" />
+              </TouchableOpacity>
+
+              <Text style={styles.subPageTitle}>
+                {activeTab === 'doctors' || activeTab === 'admin_doctors' ? 'Doctor Timings' :
+                 activeTab === 'staff' || activeTab === 'admin_staff' ? 'Staff Management' :
+                 activeTab === 'admin' ? 'Admin Portal' :
+                 activeTab === 'hr' ? 'HR Portal' :
+                 activeTab === 'reception_book' ? 'Book Appointment' :
+                 activeTab === 'reception_patients' ? 'Patients Directory' :
+                 activeTab === 'reception_medicines' ? 'Medicine Requests' :
+                 'SPH Staff Portal'}
+              </Text>
+            </View>
 
             <TouchableOpacity style={styles.signOutBtnCircle} onPress={handleSignOut}>
               <Ionicons name="log-out-outline" size={18} color="#ef4444" />
             </TouchableOpacity>
           </View>
-        </View>
+        )
       )}
 
-      {/* Mobile Side Drawer */}
+      {/* Mobile Reception Side Drawer */}
       <ReceptionSideDrawer
         visible={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        setActiveTab={navigateToTab}
         userRole={userRole}
+        branchName={branchName}
+        onSignOut={handleSignOut}
       />
 
       {/* Main Screen Content */}
@@ -252,7 +343,7 @@ export default function App() {
                 )}
 
                 <Text style={[
-                  styles.bottomTabLabel, 
+                  styles.bottomTabLabel,
                   isActive && styles.bottomTabLabelActive,
                   isLogout && { color: '#ef4444' }
                 ]}>
@@ -287,6 +378,28 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.03,
     shadowRadius: 6,
     elevation: 2,
+  },
+  subPageHeader: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: '#ffffff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    elevation: 1,
+  },
+  subPageTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  headerBackBtn: {
+    padding: 6,
+    marginRight: 2,
+    borderRadius: 8,
+    backgroundColor: '#f1f5f9',
   },
   menuDrawerBtn: {
     padding: 4,

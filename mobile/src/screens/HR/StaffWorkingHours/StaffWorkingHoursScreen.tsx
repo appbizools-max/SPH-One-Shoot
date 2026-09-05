@@ -3,15 +3,15 @@ import { StyleSheet, Text, View, ScrollView } from 'react-native';
 
 export const StaffWorkingHoursScreen: React.FC = () => {
   const staffWorkingHours = [
-    { name: 'Anil Kumar M', role: 'Receptionist', branch: 'KPHB', hours: '8.5 Hours/Day', shift: '10:00 AM - 08:30 PM' },
-    { name: 'Ashwini Begari', role: 'Front Desk', branch: 'Chandanagar', hours: '8.0 Hours/Day', shift: '10:00 AM - 08:00 PM' },
-    { name: 'Vaishnavi Peri', role: 'Manager', branch: 'Nallagandla', hours: '8.5 Hours/Day', shift: '10:00 AM - 08:30 PM' },
-    { name: 'Nandini Gottelli', role: 'Chemist', branch: 'Dilshuknagar', hours: '8.5 Hours/Day', shift: '10:00 AM - 08:30 PM' },
+    { name: 'Anil Kumar M', role: 'Regular Staff', branch: 'KPHB', hours: '8.5 Hours/Day', shift: '10:00 AM - 08:30 PM' },
+    { name: 'Ashwini Begari', role: 'Regular Staff', branch: 'Chandanagar', hours: '8.0 Hours/Day', shift: '10:00 AM - 08:00 PM' },
+    { name: 'Vaishnavi Peri', role: 'Regular Staff', branch: 'Nallagandla', hours: '8.5 Hours/Day', shift: '10:00 AM - 08:30 PM' },
+    { name: 'Nandini Gottelli', role: 'Regular Staff', branch: 'Dilshuknagar', hours: '8.5 Hours/Day', shift: '10:00 AM - 08:30 PM' },
   ];
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <Text style={styles.title}>⏱️ Staff Working Hours & Shift Roster</Text>
+      <Text style={styles.title}>Staff Working Hours & Shift Roster</Text>
       <Text style={styles.subTitle}>Daily working hours log and active shift rosters.</Text>
 
       {staffWorkingHours.map(s => (
@@ -33,6 +33,6 @@ const styles = StyleSheet.create({
   card: { backgroundColor: '#ffffff', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#e2e8f0', marginBottom: 10 },
   cardTitle: { fontSize: 14.5, fontWeight: '800', color: '#0f172a' },
   cardRole: { fontSize: 12, color: '#64748b', marginTop: 2 },
-  cardShift: { fontSize: 12, color: '#3b82f6', fontWeight: '600', marginTop: 4 },
-  cardHours: { fontSize: 12.5, color: '#16a34a', fontWeight: '700', marginTop: 2 },
+  cardShift: { fontSize: 12, color: '#258ec8', fontWeight: '600', marginTop: 4 },
+  cardHours: { fontSize: 12.5, color: '#a8ce3a', fontWeight: '700', marginTop: 2 },
 });

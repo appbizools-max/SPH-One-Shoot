@@ -1,86 +1,151 @@
 import React from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Modal, ScrollView, Image } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, Modal, ScrollView } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { UserRole } from '@app/shared';
 
 interface ReceptionSideDrawerProps {
   visible: boolean;
   onClose: () => void;
   activeTab: string;
   setActiveTab: (tab: string) => void;
-  userRole?: string;
+  userRole?: UserRole;
+  branchName?: string;
+  onSignOut?: () => void;
 }
 
-export const ReceptionSideDrawer: React.FC<ReceptionSideDrawerProps> = ({ visible, onClose, activeTab, setActiveTab, userRole = 'reception' }) => {
-  const adminMenuItems = [
-    { id: 'admin', label: 'Admin Control Hub', icon: '🛡️' },
-  ];
+export const ReceptionSideDrawer: React.FC<ReceptionSideDrawerProps> = ({
+  visible,
+  onClose,
+  activeTab,
+  setActiveTab,
+  userRole = 'reception',
+  branchName = 'Nallagandla Branch',
+  onSignOut
+}) => {
 
-  const hrMenuItems = [
-    { id: 'hr', label: 'HR & Staff Portal', icon: '👥' },
-  ];
+  const getMenuItems = () => {
+    if (userRole === 'admin') {
+      return [
+        { id: 'admin', label: 'Admin Dashboard' },
+        { id: 'admin_packages', label: 'Package Members' },
+        { id: 'admin_patients', label: 'Global Patients' },
+        { id: 'admin_banners', label: 'Manage Banners' },
+        { id: 'admin_revenue', label: 'Analytics & Revenue' },
+        { id: 'admin_pending', label: 'Pending Payments' },
+        { id: 'admin_branches', label: 'Branch Targets' },
+        { id: 'admin_doctors', label: 'Doctor Timings' },
+        { id: 'admin_staff', label: 'Staff Management' },
+        { id: 'admin_medicines', label: 'Edit Medicines' },
+      ];
+    }
 
-  const receptionMenuItems = [
-    { id: 'reception_dashboard', label: 'Dashboard', icon: '📋' },
-    { id: 'reception_book', label: 'Book Appointment', icon: '📅' },
-    { id: 'reception_patients', label: 'All Patients', icon: '👥' },
-    { id: 'reception_followups', label: 'Follow Ups', icon: '🔄' },
-    { id: 'reception_medicines', label: 'Medicine Requests', icon: '💊' },
-    { id: 'reception_billing', label: 'Product Billing', icon: '💳' },
-    { id: 'reception_noshow', label: 'Doctor No Show', icon: '🚫' },
-    { id: 'reception_media', label: 'Media Manager', icon: '🖼️' },
-    { id: 'reception_cleaning', label: 'Cleaning Photos', icon: '📷' },
-  ];
+    if (userRole === 'hr') {
+      return [
+        { id: 'hr_attendance', label: 'Staff Attendance' },
+        { id: 'hr_roster', label: 'Shift Roster' },
+        { id: 'hr_targets', label: 'Branch Targets' },
+        { id: 'hr_payroll', label: 'Staff Payroll' },
+      ];
+    }
 
-  const menuItems = userRole === 'admin' ? adminMenuItems : userRole === 'hr' ? hrMenuItems : receptionMenuItems;
-  const brandSub = userRole === 'admin' ? 'ADMIN PORTAL' : userRole === 'hr' ? 'HR PORTAL' : 'RECEPTION DESK';
+    // Default Reception menu
+    return [
+      { id: 'reception_dashboard', label: 'Dashboard' },
+      { id: 'reception_book', label: 'Book Appointment' },
+      { id: 'reception_patients', label: 'All Patients' },
+      { id: 'reception_followups', label: 'Follow Ups' },
+      { id: 'reception_medicines', label: 'Medicine Requests' },
+      { id: 'reception_billing', label: 'Product Billing' },
+      { id: 'reception_noshow', label: 'Doctor No Show' },
+      { id: 'reception_media', label: 'Media Manager' },
+      { id: 'reception_cleaning', label: 'Cleaning Photos' },
+    ];
+  };
+
+  const menuItems = getMenuItems();
 
   const handleSelect = (id: string) => {
     setActiveTab(id);
     onClose();
   };
 
+  const getRoleBadgeTitle = () => {
+    if (userRole === 'admin') return 'ADMIN MENU';
+    if (userRole === 'hr') return 'HR MENU';
+    return 'RECEPTION MENU';
+  };
+
+  const displayBranch = (branchName && !branchName.includes('HQ'))
+    ? branchName
+    : userRole === 'admin'
+      ? 'Admin Control Hub'
+      : userRole === 'hr'
+        ? 'HR Management'
+        : 'Nallagandla Branch';
+
   return (
     <Modal visible={visible} transparent animationType="fade">
       <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose}>
-        <View style={styles.drawerContainer}>
-          {/* Brand Header Banner */}
+        <View style={styles.drawerContainer} onStartShouldSetResponder={() => true}>
+
+          {/* HEADER */}
           <View style={styles.drawerHeader}>
-            <View style={styles.brandRow}>
-              <View style={styles.logoBadge}>
-                <Text style={{ fontSize: 18 }}>🌿</Text>
-              </View>
-              <View>
-                <Text style={styles.brandTitle}>Spiritual Homeo</Text>
-                <Text style={styles.brandSub}>{brandSub}</Text>
-              </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.brandTitle}>Spiritual Homeo</Text>
+              <Text style={styles.brandSub}>{getRoleBadgeTitle()}</Text>
             </View>
 
             <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-              <Text style={styles.closeBtnText}>✕</Text>
+              <Ionicons name="close" size={16} color="#64748b" />
             </TouchableOpacity>
           </View>
 
-          {/* Menu Items List */}
-          <ScrollView contentContainerStyle={{ paddingVertical: 14 }} showsVerticalScrollIndicator={false}>
-            <Text style={styles.sectionHeading}>DESK NAVIGATION</Text>
+          {/* ACTIVE BRANCH TAG (Only for Branch Receptionists/Staff) */}
+          {userRole !== 'admin' && (
+            <View style={styles.branchTagCard}>
+              <Ionicons name="location-outline" size={12} color="#258ec8" />
+              <Text style={styles.branchTagText}>{branchName}</Text>
+            </View>
+          )}
+
+          {/* FULL SCROLLING NAVIGATION CONTAINER */}
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={{ paddingVertical: 8, paddingBottom: 20 }}
+            showsVerticalScrollIndicator={false}
+          >
+            <Text style={styles.sectionHeading}>MENU OPTIONS</Text>
 
             {menuItems.map((item) => {
-              const isActive = activeTab === item.id || (item.id === 'reception_dashboard' && activeTab === 'reception');
+              const isActive = activeTab === item.id || (item.id === 'reception_dashboard' && activeTab === 'reception') || (item.id === 'admin' && activeTab === 'analytics');
               return (
                 <TouchableOpacity
                   key={item.id}
                   style={[styles.menuItem, isActive && styles.menuItemActive]}
                   onPress={() => handleSelect(item.id)}
+                  activeOpacity={0.7}
                 >
-                  <View style={[styles.iconBg, isActive && styles.iconBgActive]}>
-                    <Text style={{ fontSize: 16 }}>{item.icon}</Text>
-                  </View>
                   <Text style={[styles.menuLabel, isActive && styles.menuLabelActive]}>
                     {item.label}
                   </Text>
+
+                  {isActive && <Ionicons name="chevron-forward" size={14} color="#258ec8" />}
                 </TouchableOpacity>
               );
             })}
+
+            {/* LOG OUT BUTTON AT BOTTOM OF SCROLL */}
+            {onSignOut && (
+              <TouchableOpacity
+                style={styles.logoutBtn}
+                onPress={() => { onClose(); onSignOut(); }}
+              >
+                <Ionicons name="log-out-outline" size={15} color="#258ec8" style={{ marginRight: 6 }} />
+                <Text style={styles.logoutBtnText}>Log Out</Text>
+              </TouchableOpacity>
+            )}
           </ScrollView>
+
         </View>
       </TouchableOpacity>
     </Modal>
@@ -90,109 +155,117 @@ export const ReceptionSideDrawer: React.FC<ReceptionSideDrawerProps> = ({ visibl
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.55)',
+    backgroundColor: 'rgba(15, 23, 42, 0.5)',
     flexDirection: 'row',
   },
   drawerContainer: {
-    width: '80%',
-    maxWidth: 310,
+    width: '65%',
+    maxWidth: 240,
     backgroundColor: '#ffffff',
     height: '100%',
     paddingTop: 44,
-    paddingHorizontal: 16,
-    borderTopRightRadius: 24,
-    borderBottomRightRadius: 24,
-    shadowColor: '#258ec8',
-    shadowOffset: { width: 6, height: 0 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
+    paddingHorizontal: 12,
+    borderTopRightRadius: 18,
+    borderBottomRightRadius: 18,
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 4, height: 0 },
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
     elevation: 12,
+    display: 'flex',
+    flexDirection: 'column',
   },
   drawerHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingBottom: 16,
+    paddingBottom: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#f1f5f9',
-  },
-  brandRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  logoBadge: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: 'rgba(37, 142, 200, 0.12)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    marginBottom: 8,
   },
   brandTitle: {
-    fontSize: 16,
+    fontSize: 14.5,
     fontWeight: '800',
     color: '#258ec8',
   },
   brandSub: {
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: '800',
     color: '#a8ce3a',
     letterSpacing: 0.6,
   },
   closeBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: '#f8fafc',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  closeBtnText: {
-    fontSize: 14,
+  branchTagCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#eef5fc',
+    borderWidth: 1,
+    borderColor: 'rgba(37, 142, 200, 0.3)',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  branchTagText: {
+    fontSize: 11,
     fontWeight: '700',
-    color: '#64748b',
+    color: '#258ec8',
   },
   sectionHeading: {
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: '800',
     color: '#94a3b8',
     letterSpacing: 0.8,
-    marginBottom: 8,
-    marginLeft: 6,
+    marginBottom: 6,
+    marginLeft: 4,
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    marginBottom: 6,
-    gap: 12,
+    justifyContent: 'space-between',
+    paddingVertical: 9,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    marginBottom: 4,
+    borderWidth: 1,
+    borderColor: 'transparent',
   },
   menuItemActive: {
     backgroundColor: '#eef5fc',
-    borderLeftWidth: 4,
-    borderLeftColor: '#258ec8',
-  },
-  iconBg: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: '#f8fafc',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iconBgActive: {
-    backgroundColor: '#ffffff',
+    borderColor: 'rgba(37, 142, 200, 0.3)',
   },
   menuLabel: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#475569',
     fontWeight: '600',
   },
   menuLabelActive: {
     color: '#258ec8',
     fontWeight: '800',
+  },
+  logoutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#eef5fc',
+    borderWidth: 1,
+    borderColor: 'rgba(37, 142, 200, 0.3)',
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginTop: 16,
+  },
+  logoutBtnText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#258ec8',
   },
 });

@@ -5,7 +5,7 @@ export const ProfilePage: React.FC = () => {
   return (
     <div style={{ padding: '40px 20px', maxWidth: '800px', margin: '0 auto' }}>
       <div className="glass-card" style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '20px' }}>
-        <div style={{ background: 'linear-gradient(135deg, #06b6d4, #8b5cf6)', padding: '20px', borderRadius: '50%' }}>
+        <div style={{ background: 'linear-gradient(135deg, #258ec8, #a8ce3a)', padding: '20px', borderRadius: '50%' }}>
           <User size={36} color="#ffffff" />
         </div>
         <div>

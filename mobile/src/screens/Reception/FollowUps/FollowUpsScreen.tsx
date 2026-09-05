@@ -5,7 +5,7 @@ export const FollowUpsScreen: React.FC = () => {
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
       <View style={styles.header}>
-        <Text style={styles.title}>🔄 Patient Follow-Ups</Text>
+        <Text style={styles.title}>Patient Follow-Ups</Text>
         <Text style={styles.subtitle}>Post-consultation remedy progress & calls</Text>
       </View>
 

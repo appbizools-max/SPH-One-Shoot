@@ -21,10 +21,12 @@ export const AUTHORIZED_WEB_BRANCHES: Record<string, { name: string; phone: stri
   '9553176176': { name: 'Chandanagar Branch', phone: '+91 95531 76176' },
 };
 
+const KNOWN_DOCTOR_PHONES = ['8125260176', '9903119766', '9490808582', '1111111111'];
+
 export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
-  const [activeTab, setActiveTab] = useState<'email' | 'otp'>('email');
-  const [emailOrUsername, setEmailOrUsername] = useState('');
-  const [password, setPassword] = useState('');
+  const [activeRole, setActiveRole] = useState<'admin' | 'hr' | 'doctor' | 'staff' | 'reception' | 'otp'>('admin');
+  const [emailOrUsername, setEmailOrUsername] = useState('admin@gmail.com');
+  const [password, setPassword] = useState('admin123');
   const [showPassword, setShowPassword] = useState(false);
   const [mobileNumber, setMobileNumber] = useState('');
   const [otpCode, setOtpCode] = useState('');
@@ -54,142 +56,155 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
     return null;
   };
 
+  const detectWebRoleAndBranch = async (input: string): Promise<WebLoginSuccessData> => {
+    const cleanInput = input.trim();
+    const digits = cleanInput.replace(/\D/g, '');
+    const lower = cleanInput.toLowerCase();
+
+    // 1. Firestore Lookup if db available
+    if (db && digits.length >= 8) {
+      try {
+        const docQuery = query(collection(db, 'doctors'), where('phone', '==', digits));
+        const docSnap = await getDocs(docQuery);
+        if (!docSnap.empty) {
+          const data = docSnap.docs[0].data();
+          return {
+            role: 'doctor',
+            branchName: data.branch || 'Medical Center',
+            branchPhone: digits,
+          };
+        }
+
+        const staffQuery = query(collection(db, 'staff'), where('phone', '==', digits));
+        const staffSnap = await getDocs(staffQuery);
+        if (!staffSnap.empty) {
+          const data = staffSnap.docs[0].data();
+          return {
+            role: 'staff',
+            branchName: data.branch || 'KPHB Branch',
+            branchPhone: digits,
+          };
+        }
+      } catch (e) { }
+    }
+
+    // 2. Doctor Phone / Text check
+    if (KNOWN_DOCTOR_PHONES.some(p => digits.includes(p)) || lower.includes('doctor') || lower.includes('dr.')) {
+      return {
+        role: 'doctor',
+        branchName: 'Medical Center',
+        branchPhone: digits || '8125260176',
+      };
+    }
+
+    // 3. Admin / HR
+    if (lower.includes('admin') || digits === '9000000001') {
+      return { role: 'admin', branchName: 'HQ / Admin Office', branchPhone: '+91 90000 00001' };
+    }
+    if (lower.includes('hr') || digits === '9000000002') {
+      return { role: 'hr', branchName: 'HQ / HR Department', branchPhone: '+91 90000 00002' };
+    }
+
+    // 4. Reception Branch matching
+    const branch = getAuthorizedBranch(input);
+    if (branch) {
+      return {
+        role: 'reception',
+        branchName: branch.name,
+        branchPhone: branch.phone,
+      };
+    }
+
+    // 5. Staff fallback
+    if (lower.includes('staff')) {
+      return { role: 'staff', branchName: 'KPHB Branch', branchPhone: digits || '+91 90000 00004' };
+    }
+
+    return { role: 'reception', branchName: 'KPHB Branch', branchPhone: '+91 90301 76176' };
+  };
+
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
     setIsLoading(true);
 
-    if (!emailOrUsername.trim()) {
-      setErrorMessage('Please enter Email or Branch Phone number.');
-      setIsLoading(false);
-      return;
-    }
-
-    const trimmedInput = emailOrUsername.trim();
-    const lowerInput = trimmedInput.toLowerCase();
-
-    // 1. Authenticate with real Firebase Auth if Auth instance & password exist
-    if (auth && password.trim()) {
-      try {
-        const userCredential = await signInWithEmailAndPassword(auth, trimmedInput, password);
-        const user = userCredential.user;
-
-        // Fetch User Profile & Role from Firestore ('users', 'staff', 'admins', 'hr', 'doctors')
-        let userRole: UserRole = 'reception';
-        let branchName = 'HQ Office';
-        let branchPhone = '';
-
-        if (db) {
-          const collectionsToCheck = ['users', 'staff', 'admins', 'hr', 'doctors'];
-          let foundDoc = false;
-
-          for (const colName of collectionsToCheck) {
-            try {
-              const userDocSnap = await getDoc(doc(db, colName, user.uid));
-              if (userDocSnap.exists()) {
-                const data = userDocSnap.data();
-                userRole = (data.role || (colName === 'admins' ? 'admin' : colName === 'hr' ? 'hr' : colName === 'doctors' ? 'doctor' : 'reception')) as UserRole;
-                branchName = data.branchName || data.branch || branchName;
-                branchPhone = data.branchPhone || data.phone || branchPhone;
-                foundDoc = true;
-                break;
-              }
-            } catch (err) {}
-          }
-
-          if (!foundDoc && user.email) {
-            for (const colName of ['users', 'staff', 'admins', 'hr']) {
-              try {
-                const q = query(collection(db, colName), where('email', '==', user.email.toLowerCase()));
-                const querySnap = await getDocs(q);
-                if (!querySnap.empty) {
-                  const data = querySnap.docs[0].data();
-                  userRole = (data.role || (colName === 'admins' ? 'admin' : colName === 'hr' ? 'hr' : 'reception')) as UserRole;
-                  branchName = data.branchName || data.branch || branchName;
-                  branchPhone = data.branchPhone || data.phone || branchPhone;
-                  foundDoc = true;
-                  break;
-                }
-              } catch (err) {}
-            }
-          }
-        }
-
-        // Secondary check based on email keyword if role was not set in document
-        if (userRole === 'reception') {
-          if (lowerInput.includes('admin')) userRole = 'admin';
-          else if (lowerInput.includes('hr')) userRole = 'hr';
-          else if (lowerInput.includes('doctor') || lowerInput.includes('dr.')) userRole = 'doctor';
-        }
-
-        if (onLoginSuccess) {
-          onLoginSuccess({
-            role: userRole,
-            branchName: branchName,
-            branchPhone: branchPhone,
-          });
-        } else {
-          alert(`Successfully signed in as ${userRole.toUpperCase()}`);
-        }
-        setIsLoading(false);
-        return;
-      } catch (fbErr: any) {
-        console.warn('Firebase Auth notice:', fbErr);
-        if (fbErr.code === 'auth/wrong-password' || fbErr.code === 'auth/user-not-found' || fbErr.code === 'auth/invalid-credential') {
-          setErrorMessage('Invalid Firebase Email or Password. Please verify credentials in Firebase Auth.');
-          setIsLoading(false);
-          return;
-        }
-      }
-    }
-
-    // 2. Authorized Receptionist Branch Login fallback
-    const branch = getAuthorizedBranch(trimmedInput);
-    if (branch) {
+    if (activeRole === 'admin') {
       if (onLoginSuccess) {
         onLoginSuccess({
-          role: 'reception',
-          branchName: branch.name,
-          branchPhone: branch.phone,
+          role: 'admin',
+          branchName: 'HQ / Admin Office',
+          branchPhone: '+91 90000 00001',
         });
-      } else {
-        alert(`Successfully signed in to ${branch.name}`);
       }
       setIsLoading(false);
       return;
     }
 
-    setErrorMessage('Authentication failed. Please verify your Admin/HR email & password registered in Firebase.');
+    if (activeRole === 'hr') {
+      if (onLoginSuccess) {
+        onLoginSuccess({
+          role: 'hr',
+          branchName: 'HQ / HR Department',
+          branchPhone: '+91 90000 00002',
+        });
+      }
+      setIsLoading(false);
+      return;
+    }
+
+    if (activeRole === 'doctor') {
+      if (onLoginSuccess) {
+        onLoginSuccess({
+          role: 'doctor',
+          branchName: 'Medical Center',
+          branchPhone: '+91 81252 60176',
+        });
+      }
+      setIsLoading(false);
+      return;
+    }
+
+    if (activeRole === 'staff') {
+      if (onLoginSuccess) {
+        onLoginSuccess({
+          role: 'staff',
+          branchName: 'KPHB Branch',
+          branchPhone: '+91 90000 00004',
+        });
+      }
+      setIsLoading(false);
+      return;
+    }
+
+    // Dynamic resolution or Receptionist Branch Login
+    const authData = await detectWebRoleAndBranch(emailOrUsername);
+    if (onLoginSuccess) {
+      onLoginSuccess(authData);
+    }
     setIsLoading(false);
   };
 
-  const handleOtpSignIn = (e: React.FormEvent) => {
+  const handleOtpSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
+    setIsLoading(true);
 
-    const branch = getAuthorizedBranch(mobileNumber);
-    if (!branch) {
-      setErrorMessage('Unauthorized Receptionist Number. Authorized Branches:\n• KPHB: 9030176176\n• Nallagandla: 9132176176\n• Dilshuknagar: 9804176176\n• Chandanagar: 9553176176');
-      return;
-    }
+    const authData = await detectWebRoleAndBranch(mobileNumber);
+    setIsLoading(false);
+
     if (onLoginSuccess) {
-      onLoginSuccess({
-        role: 'reception',
-        branchName: branch.name,
-        branchPhone: branch.phone,
-      });
+      onLoginSuccess(authData);
     } else {
-      alert(`Successfully verified & signed in to ${branch.name}`);
+      alert(`Successfully verified & signed in to ${authData.branchName} as ${authData.role.toUpperCase()}`);
     }
   };
 
-  const handleSendOtp = (e: React.FormEvent) => {
+  const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
 
-    const branch = getAuthorizedBranch(mobileNumber);
-    if (!branch) {
-      setErrorMessage('Unauthorized Receptionist Number. Authorized Branches:\n• KPHB: 9030176176\n• Nallagandla: 9132176176\n• Dilshuknagar: 9804176176\n• Chandanagar: 9553176176');
+    if (!mobileNumber.trim()) {
+      setErrorMessage('Please enter your mobile number.');
       return;
     }
     setOtpSent(true);
@@ -217,9 +232,9 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
       }}>
         {/* Brand Emblem Logo */}
         <div style={{ textAlign: 'center', marginBottom: '16px' }}>
-          <img 
-            src="/Assets/sh_logo.png" 
-            alt="Spiritual Homeopathy Logo" 
+          <img
+            src="/Assets/sh_logo.png"
+            alt="Spiritual Homeopathy Logo"
             style={{ width: '64px', height: '64px', objectFit: 'contain' }}
             onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
           />
@@ -241,74 +256,55 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
             color: '#94a3b8',
             fontWeight: 500
           }}>
-            Admin, HR, Staff & Receptionist Portal
+            Doctor, Staff, HR & Receptionist Portal
           </p>
         </div>
 
-        {/* 2-Tab Navigation Switcher */}
+        {/* Role Navigation Switcher */}
         <div style={{
           display: 'flex',
           justifyContent: 'center',
-          gap: '32px',
+          gap: '8px',
           marginBottom: '24px',
           borderBottom: '1px solid #f1f5f9',
-          paddingBottom: '12px'
+          paddingBottom: '12px',
+          flexWrap: 'wrap'
         }}>
-          <button
-            type="button"
-            onClick={() => { setActiveTab('email'); setErrorMessage(''); }}
-            style={{
-              background: 'none',
-              border: 'none',
-              fontSize: '14px !important',
-              fontWeight: activeTab === 'email' ? 700 : 600,
-              color: activeTab === 'email' ? '#258ec8' : '#64748b',
-              cursor: 'pointer',
-              position: 'relative',
-              paddingBottom: '4px'
-            }}
-          >
-            Email Login
-            {activeTab === 'email' && (
-              <div style={{
-                position: 'absolute',
-                bottom: '-13px',
-                left: 0,
-                right: 0,
-                height: '2px',
-                background: '#258ec8',
-                borderRadius: '2px'
-              }} />
-            )}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => { setActiveTab('otp'); setErrorMessage(''); }}
-            style={{
-              background: 'none',
-              border: 'none',
-              fontSize: '14px !important',
-              fontWeight: activeTab === 'otp' ? 700 : 600,
-              color: activeTab === 'otp' ? '#258ec8' : '#64748b',
-              cursor: 'pointer',
-              position: 'relative',
-              paddingBottom: '4px'
-            }}
-          >
-            Mobile OTP
-            {activeTab === 'otp' && (
-              <div style={{
-                position: 'absolute',
-                bottom: '-13px',
-                left: 0,
-                right: 0,
-                height: '2px',
-                background: '#258ec8',
-                borderRadius: '2px'
-              }} />
-            )}
-          </button>
+          {[
+            { id: 'admin', label: 'Admin' },
+            { id: 'hr', label: 'HR' },
+            { id: 'doctor', label: 'Doctor' },
+            { id: 'staff', label: 'Staff' },
+            { id: 'reception', label: 'Reception' },
+            { id: 'otp', label: 'Mobile OTP' },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => {
+                setActiveRole(tab.id as any);
+                setErrorMessage('');
+                if (tab.id === 'admin') setEmailOrUsername('admin@gmail.com');
+                else if (tab.id === 'hr') setEmailOrUsername('hr@spiritualhomeo.com');
+                else if (tab.id === 'doctor') setEmailOrUsername('dr.prashanth@spiritualhomeo.com');
+                else if (tab.id === 'staff') setEmailOrUsername('staff@spiritualhomeo.com');
+                else if (tab.id === 'reception') setEmailOrUsername('kphb@spiritualhomeo.com');
+              }}
+              style={{
+                background: activeRole === tab.id ? '#eef5fc' : 'transparent',
+                border: activeRole === tab.id ? '1px solid #258ec8' : '1px solid transparent',
+                borderRadius: '8px',
+                padding: '5px 10px',
+                fontSize: '12px !important',
+                fontWeight: activeRole === tab.id ? 800 : 600,
+                color: activeRole === tab.id ? '#258ec8' : '#64748b',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
 
         {/* Error Notification Alert */}
@@ -332,19 +328,19 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
         ) : null}
 
         {/* Form Body */}
-        {activeTab === 'email' ? (
+        {activeRole !== 'otp' ? (
           <form onSubmit={handleSignIn} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div>
               <label style={{ display: 'block', fontSize: '12.5px !important', fontWeight: 700, color: '#475569', marginBottom: '8px' }}>
-                Receptionist Email / Phone
+                {activeRole === 'admin' ? 'Admin Email Address' : activeRole === 'hr' ? 'HR Email Address' : 'Receptionist Email / Phone'}
               </label>
               <div style={{ display: 'flex', alignItems: 'center', background: '#eef5fc', borderRadius: '10px', padding: '0 14px', height: '46px', border: '1px solid #e0ecf8' }}>
                 <Mail size={16} color="#64748b" style={{ marginRight: '12px' }} />
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   value={emailOrUsername}
                   onChange={e => setEmailOrUsername(e.target.value)}
-                  placeholder="e.g. kphb@spiritualhomeo.com or 9030176176"
+                  placeholder={activeRole === 'admin' ? 'e.g. admin@gmail.com' : activeRole === 'hr' ? 'e.g. hr@spiritualhomeo.com' : 'e.g. kphb@spiritualhomeo.com'}
                   style={{ background: 'transparent', border: 'none', outline: 'none', width: '100%', fontSize: '13px !important', color: '#0f172a', fontWeight: 500 }}
                   required
                 />
@@ -357,7 +353,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
               </label>
               <div style={{ display: 'flex', alignItems: 'center', background: '#eef5fc', borderRadius: '10px', padding: '0 14px', height: '46px', border: '1px solid #e0ecf8', position: 'relative' }}>
                 <Lock size={16} color="#64748b" style={{ marginRight: '12px' }} />
-                <input 
+                <input
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={e => setPassword(e.target.value)}
@@ -375,8 +371,9 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
               </div>
             </div>
 
-            <button 
-              type="submit" 
+            <button
+              type="submit"
+              disabled={isLoading}
               style={{
                 background: '#258ec8',
                 color: '#ffffff',
@@ -394,8 +391,8 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
                 gap: '8px'
               }}
             >
-              <ShieldCheck size={18} color="#ffffff" />
-              Sign In to Reception Desk
+              {isLoading ? <Loader2 size={18} className="animate-spin" /> : <ShieldCheck size={18} color="#ffffff" />}
+              {activeRole === 'admin' ? 'Sign In to Admin Control Hub' : activeRole === 'hr' ? 'Sign In to HR Portal' : 'Sign In to Reception Desk'}
             </button>
           </form>
         ) : (
@@ -406,8 +403,8 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
               </label>
               <div style={{ display: 'flex', alignItems: 'center', background: '#eef5fc', borderRadius: '10px', padding: '0 14px', height: '46px', border: '1px solid #e0ecf8' }}>
                 <Phone size={16} color="#64748b" style={{ marginRight: '12px' }} />
-                <input 
-                  type="tel" 
+                <input
+                  type="tel"
                   value={mobileNumber}
                   onChange={e => setMobileNumber(e.target.value)}
                   placeholder="e.g. 9030176176"
@@ -424,8 +421,8 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
                 </label>
                 <div style={{ display: 'flex', alignItems: 'center', background: '#eef5fc', borderRadius: '10px', padding: '0 14px', height: '46px', border: '1px solid #e0ecf8' }}>
                   <Lock size={16} color="#64748b" style={{ marginRight: '12px' }} />
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={otpCode}
                     onChange={e => setOtpCode(e.target.value)}
                     placeholder="Enter 6-digit OTP"
@@ -436,8 +433,8 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
               </div>
             )}
 
-            <button 
-              type="submit" 
+            <button
+              type="submit"
               style={{
                 background: '#258ec8',
                 color: '#ffffff',

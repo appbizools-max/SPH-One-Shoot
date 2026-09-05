@@ -12,7 +12,7 @@ export const GlobalPatientsPage: React.FC = () => {
   return (
     <div style={{ padding: '24px 20px', maxWidth: '1000px', margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
-        <Users size={24} color="#3b82f6" />
+        <Users size={24} color="#258ec8" />
         <h1 style={{ fontSize: '18px !important', fontWeight: 800, color: '#0f172a' }}>
           Global Patients Directory
         </h1>
@@ -32,7 +32,7 @@ export const GlobalPatientsPage: React.FC = () => {
           <tbody>
             {globalPatients.map(p => (
               <tr key={p.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                <td style={{ padding: '10px', fontSize: '12px !important', fontWeight: 800, color: '#3b82f6' }}>{p.id}</td>
+                <td style={{ padding: '10px', fontSize: '12px !important', fontWeight: 800, color: '#258ec8' }}>{p.id}</td>
                 <td style={{ padding: '10px', fontSize: '12.5px !important', fontWeight: 700 }}>{p.name}</td>
                 <td style={{ padding: '10px', fontSize: '12px !important' }}>{p.phone}</td>
                 <td style={{ padding: '10px', fontSize: '12px !important' }}>{p.branch}</td>

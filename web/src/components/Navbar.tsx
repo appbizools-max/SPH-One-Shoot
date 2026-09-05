@@ -10,12 +10,12 @@ interface NavbarProps {
   role?: string;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ 
-  activeTab, 
-  setActiveTab, 
-  branchName = "KPHB Branch", 
+export const Navbar: React.FC<NavbarProps> = ({
+  activeTab,
+  setActiveTab,
+  branchName = "KPHB Branch",
   branchPhone = "+91 90301 76176",
-  role = "reception"
+  role
 }) => {
   const [timeStr, setTimeStr] = useState('');
   const [dayDateStr, setDayDateStr] = useState('');
@@ -32,20 +32,24 @@ export const Navbar: React.FC<NavbarProps> = ({
     return () => clearInterval(interval);
   }, []);
 
+  const handleBrandClick = () => {
+    if (role === 'admin') {
+      setActiveTab('admin');
+    } else if (role === 'hr') {
+      setActiveTab('hr');
+    } else if (role === 'doctor') {
+      setActiveTab('doctor');
+    } else if (role === 'staff') {
+      setActiveTab('staff');
+    } else {
+      setActiveTab('reception_dashboard');
+    }
+  };
+
   const handleLogout = async () => {
     await signOutUser();
     setActiveTab('auth');
   };
-
-  const handleLogoClick = () => {
-    if (role === 'admin') setActiveTab('admin');
-    else if (role === 'hr') setActiveTab('hr');
-    else if (role === 'doctor') setActiveTab('doctor');
-    else if (role === 'staff') setActiveTab('staff');
-    else setActiveTab('reception_dashboard');
-  };
-
-  const roleTitle = role === 'admin' ? 'ADMIN PORTAL' : role === 'hr' ? 'HR PORTAL' : role === 'doctor' ? 'DOCTOR PORTAL' : role === 'staff' ? 'STAFF PORTAL' : 'RECEPTION DESK';
 
   return (
     <nav style={{
@@ -58,26 +62,26 @@ export const Navbar: React.FC<NavbarProps> = ({
       boxShadow: '0 2px 8px rgba(0, 0, 0, 0.03)'
     }}>
       <div style={{ maxWidth: '1400px', margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-        
+
         {/* LEFT SIDE: Logo + Minimalist Date & Time Pill */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
           {/* Brand Logo & Title */}
-          <div 
-            onClick={handleLogoClick}
+          <div
+            onClick={handleBrandClick}
             style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}
           >
-            <img 
-              src="/Assets/sh_logo.png" 
-              alt="Spiritual Homeo Logo" 
-              style={{ width: '36px', height: '36px', borderRadius: '8px', objectFit: 'contain' }} 
+            <img
+              src="/Assets/sh_logo.png"
+              alt="Spiritual Homeo Logo"
+              style={{ width: '36px', height: '36px', borderRadius: '8px', objectFit: 'contain' }}
               onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
             />
             <div>
               <h2 style={{ fontSize: '15px !important', fontWeight: 800, color: '#258ec8', lineHeight: 1.2 }}>
                 Spiritual Homeo
               </h2>
-              <span style={{ fontSize: '10px', color: '#64748b', fontWeight: 800 }}>
-                {roleTitle}
+              <span style={{ fontSize: '10px', color: '#64748b', fontWeight: 600 }}>
+                {role === 'admin' ? 'Admin Control Hub' : role === 'hr' ? 'HR Portal' : 'Staff Portal'}
               </span>
             </div>
           </div>
@@ -97,7 +101,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           }}>
             {/* Live Green Pulse Indicator */}
             <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#a8ce3a', boxShadow: '0 0 6px #a8ce3a' }} />
-            
+
             <Clock size={13} color="#258ec8" />
             <span style={{ fontSize: '11.5px !important', fontWeight: 800, color: '#258ec8', letterSpacing: '0.2px' }}>
               {timeStr}
@@ -114,7 +118,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* RIGHT SIDE: Branch Name & Phone Number + Log Out Button */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          
+
           {/* Branch Name & Phone Pill */}
           <div style={{
             display: 'inline-flex',

@@ -12,12 +12,12 @@ export const ProfileScreen: React.FC = () => {
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardHeader}>📋 Active Remedy Tracker</Text>
+        <Text style={styles.cardHeader}>Active Remedy Tracker</Text>
         <Text style={styles.emptyText}>No active remedy schedules yet.</Text>
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardHeader}>📅 Consultation History</Text>
+        <Text style={styles.cardHeader}>Consultation History</Text>
         <Text style={styles.emptyText}>No previous appointments found.</Text>
       </View>
     </View>
@@ -27,40 +27,41 @@ export const ProfileScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#f8fafc',
     paddingHorizontal: 20,
   },
   title: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#f8fafc',
+    color: '#0f172a',
     marginVertical: 12,
   },
   card: {
-    backgroundColor: 'rgba(30, 41, 59, 0.7)',
+    backgroundColor: '#ffffff',
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: '#e2e8f0',
   },
   userName: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#38bdf8',
+    color: '#258ec8',
   },
   userSub: {
     fontSize: 13,
-    color: '#94a3b8',
+    color: '#64748b',
     marginTop: 4,
   },
   cardHeader: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#f8fafc',
+    color: '#0f172a',
     marginBottom: 8,
   },
   emptyText: {
     fontSize: 13,
-    color: '#94a3b8',
+    color: '#64748b',
   },
 });

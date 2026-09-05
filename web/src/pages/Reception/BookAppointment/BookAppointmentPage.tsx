@@ -194,7 +194,7 @@ export const BookAppointmentPage: React.FC<BookAppointmentPageProps> = ({
               width: '32px',
               height: '32px',
               borderRadius: '10px',
-              background: '#3b82f6',
+              background: '#258ec8',
               color: '#ffffff',
               display: 'flex',
               alignItems: 'center',
@@ -377,7 +377,7 @@ export const BookAppointmentPage: React.FC<BookAppointmentPageProps> = ({
               width: '32px',
               height: '32px',
               borderRadius: '10px',
-              background: '#3b82f6',
+              background: '#258ec8',
               color: '#ffffff',
               display: 'flex',
               alignItems: 'center',
@@ -429,7 +429,7 @@ export const BookAppointmentPage: React.FC<BookAppointmentPageProps> = ({
                 onClick={() => setCalendarModalOpen(true)}
                 style={{ 
                   background: '#ffffff', 
-                  border: '1px solid #3b82f6', 
+                  border: '1px solid #258ec8', 
                   borderRadius: '12px', 
                   padding: '0 14px', 
                   height: '48px', 
@@ -439,11 +439,11 @@ export const BookAppointmentPage: React.FC<BookAppointmentPageProps> = ({
                   cursor: 'pointer'
                 }}
               >
-                <CalendarIcon size={18} color="#3b82f6" style={{ marginRight: '10px' }} />
+                <CalendarIcon size={18} color="#258ec8" style={{ marginRight: '10px' }} />
                 <span style={{ fontSize: '13.5px !important', color: '#0f172a', fontWeight: 700 }}>
                   {appointmentDate}
                 </span>
-                <CalendarIcon size={18} color="#3b82f6" />
+                <CalendarIcon size={18} color="#258ec8" />
               </div>
             </div>
 
@@ -494,7 +494,7 @@ export const BookAppointmentPage: React.FC<BookAppointmentPageProps> = ({
           {/* 4. Available Slots Section */}
           <div>
             <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px !important', fontWeight: 800, color: '#1e293b', marginBottom: '8px' }}>
-              <Clock size={16} color="#3b82f6" /> Available Slots
+              <Clock size={16} color="#258ec8" /> Available Slots
             </label>
 
             {!selectedDoctor ? (
@@ -522,9 +522,9 @@ export const BookAppointmentPage: React.FC<BookAppointmentPageProps> = ({
                       type="button"
                       onClick={() => setSelectedTimeSlot(slot)}
                       style={{
-                        background: isSelected ? '#3b82f6' : '#ffffff',
+                        background: isSelected ? '#258ec8' : '#ffffff',
                         color: isSelected ? '#ffffff' : '#334155',
-                        border: isSelected ? '1px solid #3b82f6' : '1px solid #e2e8f0',
+                        border: isSelected ? '1px solid #258ec8' : '1px solid #e2e8f0',
                         padding: '8px 16px',
                         borderRadius: '10px',
                         fontSize: '12px !important',
@@ -551,7 +551,7 @@ export const BookAppointmentPage: React.FC<BookAppointmentPageProps> = ({
           type="submit"
           disabled={isSubmitting}
           style={{
-            background: '#3b82f6',
+            background: '#258ec8',
             color: '#ffffff',
             border: 'none',
             height: '52px',
@@ -615,7 +615,7 @@ export const BookAppointmentPage: React.FC<BookAppointmentPageProps> = ({
                 onClick={handlePrevMonth}
                 style={{ background: '#f1f5f9', border: 'none', borderRadius: '8px', padding: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
               >
-                <ChevronLeft size={18} color="#3b82f6" />
+                <ChevronLeft size={18} color="#258ec8" />
               </button>
 
               <span style={{ fontSize: '15.5px !important', fontWeight: 800, color: '#0f172a' }}>
@@ -627,7 +627,7 @@ export const BookAppointmentPage: React.FC<BookAppointmentPageProps> = ({
                 onClick={handleNextMonth}
                 style={{ background: '#f1f5f9', border: 'none', borderRadius: '8px', padding: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
               >
-                <ChevronRight size={18} color="#3b82f6" />
+                <ChevronRight size={18} color="#258ec8" />
               </button>
             </div>
 
@@ -664,7 +664,7 @@ export const BookAppointmentPage: React.FC<BookAppointmentPageProps> = ({
                       width: '38px',
                       height: '38px',
                       borderRadius: '50%',
-                      background: isSelected ? '#3b82f6' : '#f8fafc',
+                      background: isSelected ? '#258ec8' : '#f8fafc',
                       color: isSelected ? '#ffffff' : '#0f172a',
                       border: 'none',
                       fontSize: '12.5px !important',

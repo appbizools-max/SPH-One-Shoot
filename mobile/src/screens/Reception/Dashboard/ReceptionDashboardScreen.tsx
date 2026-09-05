@@ -18,7 +18,7 @@ export const ReceptionDashboardScreen: React.FC<ReceptionDashboardScreenProps> =
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
       
-      {/* Professional Overview Header */}
+      {/* Overview Header */}
       <View style={styles.overviewHeader}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <Text style={styles.overviewTitle}>Overview</Text>
@@ -38,25 +38,25 @@ export const ReceptionDashboardScreen: React.FC<ReceptionDashboardScreenProps> =
       <View style={styles.metricsRow}>
         {/* Card 1: Total Bookings */}
         <View style={[styles.metricCard, { borderTopColor: '#258ec8' }]}>
-          <Text style={styles.metricNum}>{totalBookings}</Text>
+          <Text style={[styles.metricNum, { color: '#258ec8' }]}>{totalBookings}</Text>
           <Text style={styles.metricLabel} numberOfLines={1}>Total Bookings</Text>
         </View>
 
         {/* Card 2: Waiting */}
-        <View style={[styles.metricCard, { borderTopColor: '#f59e0b' }]}>
-          <Text style={[styles.metricNum, { color: '#d97706' }]}>{waiting}</Text>
+        <View style={[styles.metricCard, { borderTopColor: '#a8ce3a' }]}>
+          <Text style={[styles.metricNum, { color: '#a8ce3a' }]}>{waiting}</Text>
           <Text style={styles.metricLabel}>Waiting</Text>
         </View>
 
         {/* Card 3: Pay Pending */}
-        <View style={[styles.metricCard, { borderTopColor: '#ef4444' }]}>
-          <Text style={[styles.metricNum, { color: '#ef4444' }]}>{payPending}</Text>
+        <View style={[styles.metricCard, { borderTopColor: '#258ec8' }]}>
+          <Text style={[styles.metricNum, { color: '#258ec8' }]}>{payPending}</Text>
           <Text style={styles.metricLabel}>Pay Pending</Text>
         </View>
 
         {/* Card 4: Completed */}
-        <View style={[styles.metricCard, { borderTopColor: '#10b981' }]}>
-          <Text style={[styles.metricNum, { color: '#10b981' }]}>{completed}</Text>
+        <View style={[styles.metricCard, { borderTopColor: '#a8ce3a' }]}>
+          <Text style={[styles.metricNum, { color: '#a8ce3a' }]}>{completed}</Text>
           <Text style={styles.metricLabel}>Completed</Text>
         </View>
       </View>
@@ -64,20 +64,20 @@ export const ReceptionDashboardScreen: React.FC<ReceptionDashboardScreenProps> =
       {/* Bottom Row: 3 Clean Metric Cards */}
       <View style={styles.metricsRowSecond}>
         {/* Card 5: Appointments Completed */}
-        <View style={[styles.metricCardWide, { borderTopColor: '#6366f1' }]}>
-          <Text style={[styles.metricNum, { color: '#4338ca' }]}>{apptsCompleted}</Text>
+        <View style={[styles.metricCardWide, { borderTopColor: '#258ec8' }]}>
+          <Text style={[styles.metricNum, { color: '#258ec8' }]}>{apptsCompleted}</Text>
           <Text style={styles.metricLabel}>Appts Completed</Text>
         </View>
 
         {/* Card 6: Follow-up Opted */}
-        <View style={[styles.metricCardWide, { borderTopColor: '#8b5cf6' }]}>
-          <Text style={[styles.metricNum, { color: '#6d28d9' }]}>{followupOpted}</Text>
+        <View style={[styles.metricCardWide, { borderTopColor: '#a8ce3a' }]}>
+          <Text style={[styles.metricNum, { color: '#a8ce3a' }]}>{followupOpted}</Text>
           <Text style={styles.metricLabel}>Follow-up Opted</Text>
         </View>
 
         {/* Card 7: Follow-up Not Opted */}
-        <View style={[styles.metricCardWide, { borderTopColor: '#e11d48' }]}>
-          <Text style={[styles.metricNum, { color: '#be123c' }]}>{followupNotOpted}</Text>
+        <View style={[styles.metricCardWide, { borderTopColor: '#258ec8' }]}>
+          <Text style={[styles.metricNum, { color: '#258ec8' }]}>{followupNotOpted}</Text>
           <Text style={styles.metricLabel}>Follow-up Not Opted</Text>
         </View>
       </View>
@@ -93,8 +93,8 @@ export const ReceptionDashboardScreen: React.FC<ReceptionDashboardScreenProps> =
 
         <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
           <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-            <Ionicons name="refresh-outline" size={13} color="#d97706" />
-            <Text style={{ color: '#d97706', fontSize: 12, fontWeight: '700' }}>Restore (24h)</Text>
+            <Ionicons name="refresh-outline" size={13} color="#258ec8" />
+            <Text style={{ color: '#258ec8', fontSize: 12, fontWeight: '700' }}>Restore (24h)</Text>
           </TouchableOpacity>
           <TouchableOpacity>
             <Text style={{ color: '#258ec8', fontSize: 12, fontWeight: '700' }}>View All</Text>
@@ -179,12 +179,12 @@ const styles = StyleSheet.create({
     width: 5,
     height: 5,
     borderRadius: 2.5,
-    backgroundColor: '#16a34a',
+    backgroundColor: '#a8ce3a',
   },
   liveText: {
     fontSize: 9,
     fontWeight: '800',
-    color: '#16a34a',
+    color: '#a8ce3a',
     letterSpacing: 0.5,
   },
   todayFilterBtn: {

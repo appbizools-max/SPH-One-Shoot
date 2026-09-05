@@ -11,7 +11,7 @@ export const PackageMembersScreen: React.FC = () => {
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <Text style={styles.title}>📦 Package Members & Subscriptions</Text>
+      <Text style={styles.title}>Package Members & Subscriptions</Text>
       <Text style={styles.subTitle}>Homeopathic package subscribers & membership status.</Text>
 
       {packages.map(pkg => (
@@ -31,6 +31,6 @@ const styles = StyleSheet.create({
   subTitle: { fontSize: 12, color: '#64748b', marginBottom: 14 },
   card: { backgroundColor: '#ffffff', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#e2e8f0', marginBottom: 10 },
   cardTitle: { fontSize: 14.5, fontWeight: '800', color: '#0f172a' },
-  cardPrice: { fontSize: 12.5, fontWeight: '700', color: '#3b82f6', marginTop: 4 },
-  cardMembers: { fontSize: 12, color: '#16a34a', fontWeight: '700', marginTop: 2 },
+  cardPrice: { fontSize: 12.5, fontWeight: '700', color: '#258ec8', marginTop: 4 },
+  cardMembers: { fontSize: 12, color: '#a8ce3a', fontWeight: '700', marginTop: 2 },
 });

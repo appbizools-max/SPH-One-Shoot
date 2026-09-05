@@ -18,7 +18,7 @@ export const EditMedicinePage: React.FC = () => {
   return (
     <div style={{ padding: '24px 20px', maxWidth: '600px', margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
-        <Pill size={24} color="#3b82f6" />
+        <Pill size={24} color="#258ec8" />
         <h1 style={{ fontSize: '18px !important', fontWeight: 800, color: '#0f172a' }}>
           Edit Medicine & Remedy Inventory Form
         </h1>
@@ -63,7 +63,7 @@ export const EditMedicinePage: React.FC = () => {
           />
         </div>
 
-        <button type="submit" style={{ background: '#3b82f6', color: '#ffffff', border: 'none', padding: '10px', borderRadius: '8px', fontSize: '13px !important', fontWeight: 800, cursor: 'pointer', marginTop: '6px' }}>
+        <button type="submit" style={{ background: '#258ec8', color: '#ffffff', border: 'none', padding: '10px', borderRadius: '8px', fontSize: '13px !important', fontWeight: 800, cursor: 'pointer', marginTop: '6px' }}>
           Save Medicine Details
         </button>
       </form>

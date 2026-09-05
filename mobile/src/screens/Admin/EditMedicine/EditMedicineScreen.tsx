@@ -11,13 +11,13 @@ export const EditMedicineScreen: React.FC = () => {
       Alert.alert('Required Field', 'Please enter medicine name.');
       return;
     }
-    Alert.alert('Saved 🎉', `Medicine ${medName} updated successfully.`);
+    Alert.alert('Saved', `Medicine ${medName} updated successfully.`);
     setMedName('');
   };
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <Text style={styles.title}>💊 Edit Medicine & Remedy Form</Text>
+      <Text style={styles.title}>Edit Medicine & Remedy Form</Text>
       <Text style={styles.subTitle}>Add or update homeopathic remedies and inventory stock.</Text>
 
       <View style={styles.card}>
@@ -67,6 +67,6 @@ const styles = StyleSheet.create({
   fieldLabel: { fontSize: 12, fontWeight: '700', color: '#0f172a', marginTop: 10, marginBottom: 4 },
   inputBox: { backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 10, paddingHorizontal: 12, height: 44, justifyContent: 'center' },
   inputText: { fontSize: 13, color: '#0f172a' },
-  saveBtn: { backgroundColor: '#3b82f6', borderRadius: 12, height: 46, alignItems: 'center', justifyContent: 'center', marginTop: 16 },
+  saveBtn: { backgroundColor: '#258ec8', borderRadius: 12, height: 46, alignItems: 'center', justifyContent: 'center', marginTop: 16 },
   saveBtnText: { color: '#ffffff', fontSize: 14, fontWeight: '800' },
 });

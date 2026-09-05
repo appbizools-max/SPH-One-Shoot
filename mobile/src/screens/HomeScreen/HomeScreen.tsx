@@ -10,7 +10,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
     <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
       {/* Header Badge */}
       <View style={styles.badge}>
-        <Text style={styles.badgeText}>🌿 SPIRITUAL HOMEO MOBILE</Text>
+        <Text style={styles.badgeText}>SPIRITUAL HOMEO MOBILE</Text>
       </View>
 
       <Text style={styles.title}>Natural Homeopathic & Spiritual Healing</Text>
@@ -30,17 +30,17 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate }) => {
 
       {/* Cards */}
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>📖 Homeopathic Remedies</Text>
+        <Text style={styles.cardTitle}>Homeopathic Remedies</Text>
         <Text style={styles.cardDesc}>Browse remedies for acute and chronic conditions with precise potency guidance.</Text>
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>✨ Spiritual Consultations</Text>
+        <Text style={styles.cardTitle}>Spiritual Consultations</Text>
         <Text style={styles.cardDesc}>Connect 1-on-1 with qualified homeopathic doctors and wellness guides.</Text>
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>📱 iOS & Android Ready</Text>
+        <Text style={styles.cardTitle}>iOS & Android Ready</Text>
         <Text style={styles.cardDesc}>Running natively on {Platform.OS.toUpperCase()} with shared cloud state.</Text>
       </View>
     </ScrollView>
@@ -84,7 +84,7 @@ const styles = StyleSheet.create({
   },
   btnPrimary: {
     flex: 1,
-    backgroundColor: '#06b6d4',
+    backgroundColor: '#258ec8',
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: 'center',
@@ -96,30 +96,30 @@ const styles = StyleSheet.create({
   },
   btnSecondary: {
     flex: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: '#ffffff',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: '#cbd5e1',
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: 'center',
   },
   btnSecondaryText: {
-    color: '#f8fafc',
-    fontWeight: '600',
+    color: '#258ec8',
+    fontWeight: '700',
     fontSize: 14,
   },
   card: {
-    backgroundColor: 'rgba(30, 41, 59, 0.7)',
+    backgroundColor: '#ffffff',
     borderRadius: 16,
     padding: 18,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: '#e2e8f0',
   },
   cardTitle: {
     fontSize: 17,
     fontWeight: '700',
-    color: '#38bdf8',
+    color: '#258ec8',
     marginBottom: 6,
   },
   cardDesc: {

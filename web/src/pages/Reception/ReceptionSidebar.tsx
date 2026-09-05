@@ -1,12 +1,29 @@
 import React from 'react';
-import { ClipboardList, Calendar, Users, RefreshCw, Pill, CreditCard, UserX, Image, Camera, ChevronRight } from 'lucide-react';
+import { ClipboardList, Calendar, Users, RefreshCw, Pill, CreditCard, UserX, Image, Camera, ChevronRight, ChevronLeft } from 'lucide-react';
 
 interface ReceptionSidebarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
+  isNavCollapsed?: boolean;
+  setIsNavCollapsed?: (collapsed: boolean) => void;
 }
 
-export const ReceptionSidebar: React.FC<ReceptionSidebarProps> = ({ activeTab, setActiveTab }) => {
+export const ReceptionSidebar: React.FC<ReceptionSidebarProps> = ({
+  activeTab,
+  setActiveTab,
+  isNavCollapsed = false,
+  setIsNavCollapsed
+}) => {
+  try {
+    const saved = localStorage.getItem('sph_auth_session');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed?.role === 'admin' || parsed?.role === 'hr') {
+        return null;
+      }
+    }
+  } catch (e) {}
+
   const menuItems = [
     { id: 'reception_dashboard', label: 'Dashboard', icon: ClipboardList },
     { id: 'reception_book', label: 'Book Appointment', icon: Calendar },
@@ -21,25 +38,58 @@ export const ReceptionSidebar: React.FC<ReceptionSidebarProps> = ({ activeTab, s
 
   return (
     <aside style={{
-      width: '200px',
-      minWidth: '200px',
+      width: isNavCollapsed ? '64px' : '200px',
+      minWidth: isNavCollapsed ? '64px' : '200px',
       background: '#ffffff',
       borderRight: '1px solid #e2e8f0',
       position: 'fixed',
       top: '67px',
       bottom: 0,
       left: 0,
-      padding: '14px 10px',
+      padding: isNavCollapsed ? '14px 6px' : '14px 10px',
       display: 'flex',
       flexDirection: 'column',
       gap: '3px',
-      overflow: 'hidden',
-      zIndex: 40
+      overflowY: 'auto',
+      overflowX: 'hidden',
+      zIndex: 40,
+      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
     }}>
-      <div style={{ padding: '0 6px', marginBottom: '6px' }}>
-        <h3 style={{ fontSize: '10px !important', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.6px' }}>
-          Reception Desk Menu
-        </h3>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: isNavCollapsed ? 'center' : 'space-between',
+        padding: '0 4px 8px 4px',
+        marginBottom: '6px',
+        borderBottom: '1px solid #f1f5f9'
+      }}>
+        {!isNavCollapsed && (
+          <h3 style={{ fontSize: '10px !important', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.6px', margin: 0 }}>
+            Reception Menu
+          </h3>
+        )}
+        {setIsNavCollapsed && (
+          <button
+            onClick={() => setIsNavCollapsed(!isNavCollapsed)}
+            title={isNavCollapsed ? "Expand Sidebar (Open)" : "Collapse Sidebar (Close)"}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '26px',
+              height: '26px',
+              borderRadius: '6px',
+              border: '1px solid #cbd5e1',
+              background: '#f8fafc',
+              color: '#258ec8',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+            }}
+          >
+            {isNavCollapsed ? <ChevronRight size={16} color="#258ec8" /> : <ChevronLeft size={16} color="#258ec8" />}
+          </button>
+        )}
       </div>
 
       {menuItems.map((item) => {
@@ -49,12 +99,13 @@ export const ReceptionSidebar: React.FC<ReceptionSidebarProps> = ({ activeTab, s
           <button
             key={item.id}
             onClick={() => setActiveTab(item.id)}
+            title={isNavCollapsed ? item.label : undefined}
             style={{
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'space-between',
+              justifyContent: isNavCollapsed ? 'center' : 'space-between',
               width: '100%',
-              padding: '7px 10px',
+              padding: isNavCollapsed ? '9px 0' : '7px 10px',
               borderRadius: '8px',
               border: isActive ? '1px solid rgba(37, 142, 200, 0.3)' : '1px solid transparent',
               background: isActive ? 'rgba(37, 142, 200, 0.1)' : 'transparent',
@@ -66,11 +117,11 @@ export const ReceptionSidebar: React.FC<ReceptionSidebarProps> = ({ activeTab, s
               textAlign: 'left'
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Icon size={14} color={isActive ? '#258ec8' : '#64748b'} />
-              <span>{item.label}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: isNavCollapsed ? 'center' : 'flex-start' }}>
+              <Icon size={16} color={isActive ? '#258ec8' : '#64748b'} />
+              {!isNavCollapsed && <span>{item.label}</span>}
             </div>
-            {isActive && <ChevronRight size={13} color="#258ec8" />}
+            {!isNavCollapsed && isActive && <ChevronRight size={13} color="#258ec8" />}
           </button>
         );
       })}

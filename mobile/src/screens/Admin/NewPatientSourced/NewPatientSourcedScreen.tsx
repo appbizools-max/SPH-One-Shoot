@@ -15,7 +15,7 @@ export const NewPatientSourcedScreen: React.FC = () => {
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <Text style={styles.title}>📈 New Patient & Marketing Source Data</Text>
+      <Text style={styles.title}>New Patient & Marketing Source Data</Text>
       <Text style={styles.subTitle}>Breakdown of patient acquisitions by source.</Text>
 
       {sources.map(s => (
@@ -34,5 +34,5 @@ const styles = StyleSheet.create({
   subTitle: { fontSize: 12, color: '#64748b', marginBottom: 14 },
   card: { backgroundColor: '#ffffff', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#e2e8f0', marginBottom: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   cardTitle: { fontSize: 14.5, fontWeight: '800', color: '#0f172a' },
-  cardCount: { fontSize: 12.5, fontWeight: '700', color: '#3b82f6' },
+  cardCount: { fontSize: 12.5, fontWeight: '700', color: '#258ec8' },
 });

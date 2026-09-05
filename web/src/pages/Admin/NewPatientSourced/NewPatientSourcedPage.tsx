@@ -16,7 +16,7 @@ export const NewPatientSourcedPage: React.FC = () => {
   return (
     <div style={{ padding: '24px 20px', maxWidth: '1000px', margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
-        <Megaphone size={24} color="#3b82f6" />
+        <Megaphone size={24} color="#258ec8" />
         <h1 style={{ fontSize: '18px !important', fontWeight: 800, color: '#0f172a' }}>
           New Patient Acquisition & Marketing Source Data
         </h1>
@@ -26,7 +26,7 @@ export const NewPatientSourcedPage: React.FC = () => {
         {sources.map(s => (
           <div key={s.name} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: '13.5px !important', fontWeight: 800, color: '#0f172a' }}>{s.name}</span>
-            <span style={{ fontSize: '12.5px !important', fontWeight: 800, color: '#3b82f6' }}>{s.count} Patients</span>
+            <span style={{ fontSize: '12.5px !important', fontWeight: 800, color: '#258ec8' }}>{s.count} Patients</span>
           </div>
         ))}
       </div>

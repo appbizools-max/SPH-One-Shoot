@@ -150,7 +150,7 @@ input, select, textarea, button { font-size: 11.5px !important; }
   max-height: 340px !important;
   overflow-y: auto !important;
   scrollbar-width: thin;
-  scrollbar-color: #3b82f6 #f1f5f9;
+  scrollbar-color: #258ec8 #f1f5f9;
 }
 
 .custom-dropdown-scroll::-webkit-scrollbar {
@@ -163,7 +163,7 @@ input, select, textarea, button { font-size: 11.5px !important; }
 }
 
 .custom-dropdown-scroll::-webkit-scrollbar-thumb {
-  background: #3b82f6;
+  background: #258ec8;
   border-radius: 8px;
 }
 

@@ -5,7 +5,7 @@ export const CleaningPhotosScreen: React.FC = () => {
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
       <View style={styles.header}>
-        <Text style={styles.title}>📷 Clinic Sanitation & Cleaning Photos</Text>
+        <Text style={styles.title}>Clinic Sanitation & Cleaning Photos</Text>
         <Text style={styles.subtitle}>Daily clinic hygiene & sterilization photo logs</Text>
       </View>
 
@@ -13,7 +13,7 @@ export const CleaningPhotosScreen: React.FC = () => {
         <Text style={styles.cardHeader}>Upload Daily Cleaning Photo</Text>
         <Text style={styles.subText}>Take a photo of sterilized Consultation Rooms or Waiting Lounge.</Text>
         <TouchableOpacity style={styles.btn}>
-          <Text style={styles.btnText}>📷 Take & Upload Photo</Text>
+          <Text style={styles.btnText}>Take & Upload Photo</Text>
         </TouchableOpacity>
       </View>
     </ScrollView>

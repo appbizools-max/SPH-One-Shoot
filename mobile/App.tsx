@@ -197,21 +197,21 @@ export default function App() {
       case 'reception_dashboard':
         return <ReceptionDashboardScreen onNavigate={navigateToTab} />;
       case 'reception_book':
-        return <BookAppointmentScreen currentBranch={branchName} />;
+        return <BookAppointmentScreen currentBranch={branchName} onNavigate={navigateToTab} onBack={handleGoBack} />;
       case 'reception_patients':
-        return <AllPatientsScreen />;
+        return <AllPatientsScreen onNavigate={navigateToTab} onBack={handleGoBack} />;
       case 'reception_followups':
-        return <FollowUpsScreen />;
+        return <FollowUpsScreen onNavigate={navigateToTab} onBack={handleGoBack} />;
       case 'reception_medicines':
-        return <MedicineRequestsScreen />;
+        return <MedicineRequestsScreen onNavigate={navigateToTab} onBack={handleGoBack} />;
       case 'reception_billing':
-        return <ProductBillingScreen />;
+        return <ProductBillingScreen onNavigate={navigateToTab} onBack={handleGoBack} />;
       case 'reception_noshow':
-        return <DoctorNoShowScreen />;
+        return <DoctorNoShowScreen onNavigate={navigateToTab} onBack={handleGoBack} />;
       case 'reception_media':
-        return <MediaManagerScreen />;
+        return <MediaManagerScreen onNavigate={navigateToTab} onBack={handleGoBack} />;
       case 'reception_cleaning':
-        return <CleaningPhotosScreen />;
+        return <CleaningPhotosScreen onNavigate={navigateToTab} onBack={handleGoBack} />;
 
       default:
         return <AuthScreen onLoginSuccess={handleLoginSuccess} />;

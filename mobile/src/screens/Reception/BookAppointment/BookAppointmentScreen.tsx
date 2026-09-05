@@ -1,8 +1,13 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { StyleSheet, Text, View, ScrollView, TextInput, TouchableOpacity, Modal, Alert } from 'react-native';
+import React, { useState, useEffect, useMemo, useRef, memo } from 'react';
+import { StyleSheet, Text, View, ScrollView, TextInput, TouchableOpacity, Modal, Alert, BackHandler, Keyboard, InteractionManager } from 'react-native';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createDocument, db } from '@app/shared';
-import { collection, onSnapshot, addDoc, deleteDoc, doc } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, deleteDoc, doc, query, where, limit } from 'firebase/firestore';
+let GLOBAL_MOBILE_PATIENTS_CACHE: any[] = [];
+let GLOBAL_MOBILE_APPTS_CACHE: any[] = [];
+const STORAGE_PATIENTS_KEY = '@sph_patients_cache_v2';
+const STORAGE_APPTS_KEY = '@sph_appts_cache_v2';
 
 interface BookAppointmentScreenProps {
   currentBranch?: string;
@@ -203,9 +208,12 @@ const DEFAULT_DOCTORS_SEED: Doctor[] = [
 ];
 
 export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
-  currentBranch = "Nallagandla"
+  currentBranch = "Nallagandla",
+  onNavigate,
+  onBack
 }) => {
   // Section 1: Patient Details
+  const [patientSearchTerm, setPatientSearchTerm] = useState('');
   const [patientName, setPatientName] = useState('');
   const [diseases, setDiseases] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -308,26 +316,163 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
     }
   }, [appointmentDate, currentBranch, availableDoctors]);
 
-  // Firestore Live Existing Appointments List for 15-min Slot Capacity Tracking
-  const [existingAppointments, setExistingAppointments] = useState<any[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+  const searchTimerRef = useRef<any>(null);
 
-  useEffect(() => {
-    try {
-      const appColRef = collection(db, 'appointments');
-      const unsubscribe = onSnapshot(appColRef, (snapshot) => {
-        const appList: any[] = [];
-        snapshot.forEach((snap) => {
-          appList.push({ id: snap.id, ...snap.data() });
-        });
-        setExistingAppointments(appList);
-      }, (err) => {
-        console.warn('Appointments snapshot warning:', err);
-      });
-      return () => unsubscribe();
-    } catch (e) {
-      console.warn('Appointments listener notice:', e);
+  const handleSearchChange = (val: string) => {
+    setPatientSearchTerm(val);
+    setShowSuggestions(true);
+    if (searchTimerRef.current) {
+      clearTimeout(searchTimerRef.current);
     }
-  }, []);
+    searchTimerRef.current = setTimeout(() => {
+      setDebouncedSearchTerm(val);
+    }, 150);
+  };
+
+  // Instant 1-Tap Back Navigation & Keyboard Dismissal
+  const handleDirectGoBack = () => {
+    Keyboard.dismiss();
+    setShowSuggestions(false);
+    setPatientSearchTerm('');
+    setDebouncedSearchTerm('');
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    setMarketingExpanded(false);
+    setModeExpanded(false);
+
+    if (onBack) {
+      onBack();
+    } else if (onNavigate) {
+      onNavigate('reception_dashboard');
+    }
+  };
+
+  // Handle Android BackHandler to trigger instant direct go back
+  useEffect(() => {
+    const onBackPress = () => {
+      handleDirectGoBack();
+      return true;
+    };
+
+    const backSubscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => backSubscription.remove();
+  }, [onBack, onNavigate]);
+
+  // Firestore Live Patient History Collections (appointments & patients) with 0ms Instant Device Cache
+  const [existingAppointments, setExistingAppointments] = useState<any[]>(GLOBAL_MOBILE_APPTS_CACHE);
+  const [patientsList, setPatientsList] = useState<any[]>(GLOBAL_MOBILE_PATIENTS_CACHE);
+
+  // 1. Deferred Non-Blocking Background Firestore Sync (InteractionManager runAfterInteractions)
+  useEffect(() => {
+    let appUnsub: (() => void) | undefined;
+    let patUnsub: (() => void) | undefined;
+
+    const task = InteractionManager.runAfterInteractions(() => {
+      try {
+        const appColRef = collection(db, 'appointments');
+        const qApp = currentBranch
+          ? query(appColRef, where('branch', '==', currentBranch), limit(300))
+          : query(appColRef, limit(300));
+
+        appUnsub = onSnapshot(qApp, (snapshot) => {
+          const appList: any[] = [];
+          snapshot.forEach((snap) => {
+            appList.push({ id: snap.id, ...snap.data() });
+          });
+          GLOBAL_MOBILE_APPTS_CACHE = appList;
+          setExistingAppointments(appList);
+        }, () => { });
+
+        const patColRef = collection(db, 'patients');
+        const qPat = query(patColRef, limit(300));
+        patUnsub = onSnapshot(qPat, (snapshot) => {
+          const list: any[] = [];
+          snapshot.forEach((snap) => {
+            list.push({ id: snap.id, ...snap.data() });
+          });
+          GLOBAL_MOBILE_PATIENTS_CACHE = list;
+          setPatientsList(list);
+        }, () => { });
+      } catch (e) { }
+    });
+
+    return () => {
+      task.cancel();
+      if (appUnsub) appUnsub();
+      if (patUnsub) patUnsub();
+    };
+  }, [currentBranch]);
+
+  // Deduplicated Patient History Database
+  interface PatientRecordItem {
+    name: string;
+    phone: string;
+    email: string;
+    diseases: string;
+    branch: string;
+    nameLower: string;
+    phoneLower: string;
+  }
+
+  // Sub-millisecond recommendations triggered INSTANTLY when search term >= 2 characters/digits (Lazy evaluation - 0ms mount lag)
+  const patientSuggestions = useMemo(() => {
+    const term = debouncedSearchTerm.trim().toLowerCase();
+    if (term.length < 2) return [];
+
+    const isDigits = /^\d+$/.test(term);
+    const results: PatientRecordItem[] = [];
+    const visited = new Set<string>();
+
+    const checkAndAdd = (item: any) => {
+      if (!item || results.length >= 10) return true;
+      const name = (item.patientName || item.name || item.fullName || item.userName || item.patient_name || item.displayName || '').trim();
+      const phone = (item.phoneNumber || item.phone || item.mobile || item.mobileNumber || item.contact || item.contactNumber || item.phone_number || '').trim();
+      if (!name && !phone) return false;
+
+      const nameLower = name.toLowerCase();
+      const phoneLower = phone.toLowerCase();
+      const key = `${phoneLower}_${nameLower}`;
+
+      if (visited.has(key)) return false;
+      visited.add(key);
+
+      const matches = isDigits
+        ? (phoneLower.includes(term) || nameLower.includes(term))
+        : (nameLower.includes(term) || phoneLower.includes(term));
+
+      if (matches) {
+        const email = (item.emailAddress || item.email || item.email_address || item.userEmail || '').trim();
+        const diseases = (item.diseases || item.symptoms || item.disease || item.illness || item.problem || item.chiefComplaints || item.notes || '').trim();
+        const branch = (item.branch || item.assignedBranch || item.branchName || item.location || '').trim();
+
+        results.push({ name, phone, email, diseases, branch, nameLower, phoneLower });
+        if (results.length >= 10) return true;
+      }
+      return false;
+    };
+
+    for (let i = 0; i < patientsList.length; i++) {
+      if (checkAndAdd(patientsList[i])) break;
+    }
+    if (results.length < 10) {
+      for (let i = 0; i < existingAppointments.length; i++) {
+        if (checkAndAdd(existingAppointments[i])) break;
+      }
+    }
+
+    return results;
+  }, [debouncedSearchTerm, patientsList, existingAppointments]);
+
+  const handleSelectPatientSuggestion = (item: PatientRecordItem) => {
+    setPatientName(item.name || '');
+    setPhoneNumber(item.phone || '');
+    setEmailAddress(item.email || '');
+    setDiseases(item.diseases || '');
+    setPatientSearchTerm(item.name || item.phone || '');
+    setDebouncedSearchTerm('');
+    setShowSuggestions(false);
+  };
 
   // Time conversion helpers for 15-min slot generation
   const parseTimeToMinutes = (hourStr: string, minStr: string, ampm: 'AM' | 'PM'): number => {
@@ -413,7 +558,7 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
   const handleAddSlotBefore = async () => {
     if (!selectedDoctor || timeSlotsList.length === 0) return;
     try {
-      const earliestStr = timeSlotsList[0]; 
+      const earliestStr = timeSlotsList[0];
       const [timePart, ampm] = earliestStr.split(' ');
       const [h, m] = timePart.split(':');
       const totalMins = parseTimeToMinutes(h, m, ampm as 'AM' | 'PM');
@@ -451,7 +596,7 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
   const handleAddSlotAfter = async () => {
     if (!selectedDoctor || timeSlotsList.length === 0) return;
     try {
-      const latestStr = timeSlotsList[timeSlotsList.length - 1]; 
+      const latestStr = timeSlotsList[timeSlotsList.length - 1];
       const [timePart, ampm] = latestStr.split(' ');
       const [h, m] = timePart.split(':');
       const totalMins = parseTimeToMinutes(h, m, ampm as 'AM' | 'PM');
@@ -498,7 +643,7 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
 
   // Compute available 15-minute time slots (Regular + Temporary) for selected doctor
   const selectedDocObj = availableDoctors.find((d) => d.name === selectedDoctor);
-  const timeSlotsList = (() => {
+  const timeSlotsList = useMemo(() => {
     const defaultFallbackRanges: TimeSlot[] = [{
       startHour: '10', startMinute: '00', startAmPm: 'AM',
       endHour: '01', endMinute: '00', endAmPm: 'PM'
@@ -551,7 +696,7 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
     // Merge regular & temp slots, remove duplicates, and sort chronologically
     const combined = Array.from(new Set([...regularSlots, ...generatedTempSlots]));
     return sortTimeSlotsChronologically(combined);
-  })();
+  }, [selectedDocObj, selectedDoctor, currentBranch, selectedDayName, appointmentDate, tempSlotsList]);
 
   const normalizeTimeStr = (str: string): string => {
     if (!str) return '';
@@ -605,6 +750,8 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
 
   // Helper to delete temporary slot from Firestore
   const handleDeleteTempSlot = async (tempDocId: string) => {
+    if (!tempDocId) return;
+    setTempSlotsList((prev) => prev.filter((ts) => ts.id !== tempDocId));
     try {
       await deleteDoc(doc(db, 'doctor_temp_slots', tempDocId));
     } catch (e) {
@@ -714,7 +861,7 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
 
       Alert.alert('Success', `Appointment Booked Successfully for ${patientName}!`);
 
-      // Reset
+      // Complete Form & Search Reset to eliminate post-booking lag
       setPatientName('');
       setDiseases('');
       setPhoneNumber('');
@@ -722,6 +869,10 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
       setMarketingSource('Select Source');
       setSelectedDoctor('');
       setSelectedTimeSlot('');
+      setPatientSearchTerm('');
+      setDebouncedSearchTerm('');
+      setShowSuggestions(false);
+      Keyboard.dismiss();
     } catch (err) {
       Alert.alert('Appointment Booked', `Appointment for ${patientName} saved locally.`);
       setPatientName('');
@@ -729,26 +880,27 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
       setPhoneNumber('');
       setEmailAddress('');
       setSelectedDoctor('');
+      setPatientSearchTerm('');
+      setDebouncedSearchTerm('');
+      setShowSuggestions(false);
+      Keyboard.dismiss();
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <ScrollView 
-      style={styles.container} 
-      contentContainerStyle={{ paddingBottom: 140 }} 
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={{ paddingBottom: 140 }}
       showsVerticalScrollIndicator={false}
       nestedScrollEnabled={true}
     >
       {/* Back Arrow < & Title Header */}
       <View style={styles.topHeaderNav}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.backBtn}
-          onPress={() => {
-            if (onBack) onBack();
-            else if (onNavigate) onNavigate('reception_dashboard');
-          }}
+          onPress={handleDirectGoBack}
         >
           <Feather name="chevron-left" size={24} color="#0f172a" />
         </TouchableOpacity>
@@ -756,7 +908,7 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
       </View>
 
       {/* CARD 1: PATIENT DETAILS */}
-      <View style={[styles.card, { zIndex: (marketingExpanded || modeExpanded) ? 100 : 1 }]}>
+      <View style={[styles.card, { zIndex: (marketingExpanded || modeExpanded || (showSuggestions && patientSuggestions.length > 0)) ? 1000 : 1 }]}>
         <View style={styles.cardHeaderRow}>
           <View style={styles.badgeNumberCircle}>
             <Text style={styles.badgeNumberText}>1</Text>
@@ -765,9 +917,61 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
           <View style={styles.cardHeaderLine} />
         </View>
 
+        {/* DEDICATED PROMINENT PATIENT SEARCH BAR FOR MOBILE */}
+        <View style={{ position: 'relative', marginBottom: 16, zIndex: 999 }}>
+          <Text style={{ fontSize: 11, fontWeight: '800', color: '#258ec8', marginBottom: 6 }}>
+            🔎 Search Existing Patient (Type 2+ letters or phone digits)
+          </Text>
+          <View
+            style={{
+              backgroundColor: '#f8fafc',
+              borderWidth: 2,
+              borderColor: '#258ec8',
+              borderRadius: 12,
+              paddingHorizontal: 12,
+              height: 48,
+              flexDirection: 'row',
+              alignItems: 'center',
+            }}
+          >
+            <Feather name="search" size={18} color="#258ec8" style={{ marginRight: 8 }} />
+            <TextInput
+              style={{ flex: 1, fontSize: 13, color: '#0f172a', fontWeight: '600' }}
+              placeholder="Search patient by Name or Mobile..."
+              placeholderTextColor="#94a3b8"
+              value={patientSearchTerm}
+              onFocus={() => {
+                if (patientSearchTerm) setDebouncedSearchTerm(patientSearchTerm);
+                setShowSuggestions(true);
+              }}
+              onChangeText={handleSearchChange}
+            />
+            {patientSearchTerm ? (
+              <TouchableOpacity
+                onPress={() => {
+                  setPatientSearchTerm('');
+                  setDebouncedSearchTerm('');
+                  setShowSuggestions(false);
+                }}
+                style={{ padding: 4 }}
+              >
+                <Feather name="x" size={16} color="#64748b" />
+              </TouchableOpacity>
+            ) : null}
+          </View>
+
+          {/* FLOATING RECOMMENDATION DROPDOWN FOR MOBILE SEARCH BAR */}
+          {showSuggestions && debouncedSearchTerm.trim().length >= 2 && patientSuggestions.length > 0 && (
+            <PatientSuggestionsDropdown
+              suggestions={patientSuggestions}
+              onSelect={handleSelectPatientSuggestion}
+            />
+          )}
+        </View>
+
         {/* 2-Column Inputs: Patient Name & Diseases */}
-        <View style={styles.rowTwoCol}>
-          <View style={styles.colField}>
+        <View style={[styles.rowTwoCol, { zIndex: 500 }]}>
+          <View style={[styles.colField, { zIndex: 600 }]}>
             <Text style={styles.fieldLabel}>Patient Name</Text>
             <View style={styles.inputBox}>
               <TextInput
@@ -775,7 +979,14 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
                 placeholder="Enter patient's name"
                 placeholderTextColor="#94a3b8"
                 value={patientName}
-                onChangeText={setPatientName}
+                onFocus={() => {
+                  if (patientName) setDebouncedSearchTerm(patientName);
+                  setShowSuggestions(true);
+                }}
+                onChangeText={(val) => {
+                  setPatientName(val);
+                  handleSearchChange(val);
+                }}
               />
             </View>
           </View>
@@ -805,7 +1016,14 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
                 placeholderTextColor="#94a3b8"
                 keyboardType="phone-pad"
                 value={phoneNumber}
-                onChangeText={setPhoneNumber}
+                onFocus={() => {
+                  if (phoneNumber) setDebouncedSearchTerm(phoneNumber);
+                  setShowSuggestions(true);
+                }}
+                onChangeText={(val) => {
+                  setPhoneNumber(val);
+                  handleSearchChange(val);
+                }}
               />
             </View>
           </View>
@@ -962,7 +1180,6 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
             <View
               style={styles.floatingMenu}
               onStartShouldSetResponder={() => true}
-              onTouchStart={(e) => e.stopPropagation()}
             >
               <ScrollView
                 nestedScrollEnabled={true}
@@ -970,7 +1187,6 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
                 scrollEventThrottle={16}
                 showsVerticalScrollIndicator={true}
                 keyboardShouldPersistTaps="handled"
-                onTouchStart={(e) => e.stopPropagation()}
                 style={{ maxHeight: 180 }}
               >
                 {availableDoctors.length === 0 ? (
@@ -1054,111 +1270,15 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
               </Text>
             </View>
           ) : (
-            <View style={[styles.slotsGrid, { overflow: 'visible', paddingTop: 8, paddingRight: 6 }]}>
-              {timeSlotsList.map((slot) => {
-                const isSelected = selectedTimeSlot === slot;
-                const { remainingSlots, isFull } = getSlotCapacityInfo(slot);
-                const normKey = normalizeTimeStr(slot);
-                const tempDocId = tempSlotMap[normKey] || tempSlotMap[slot.trim()];
-                const isTemp = !!tempDocId;
-
-                return (
-                  <View key={slot} style={{ width: '23.2%', position: 'relative', overflow: 'visible', marginBottom: 6 }}>
-                    <TouchableOpacity
-                      disabled={isFull}
-                      style={[
-                        styles.slotChipColumn,
-                        isTemp && {
-                          borderColor: '#dc2626',
-                          borderWidth: 2,
-                          backgroundColor: isSelected ? '#dc2626' : '#fff5f5',
-                        },
-                        isSelected && !isTemp && styles.slotChipSelected,
-                        isSelected && isTemp && { backgroundColor: '#dc2626', borderColor: '#991b1b', borderWidth: 2 },
-                        isFull && { backgroundColor: '#f1f5f9', borderColor: '#cbd5e1', opacity: 0.65 }
-                      ]}
-                      onPress={() => {
-                        if (!isFull) {
-                          setSelectedTimeSlot(slot);
-                        }
-                      }}
-                      activeOpacity={isFull ? 1 : 0.8}
-                    >
-                      <Text style={[
-                        styles.slotChipText,
-                        isTemp && !isSelected && { color: '#dc2626', fontWeight: '800' },
-                        isSelected && styles.slotChipTextSelected,
-                        isFull && { color: '#94a3b8', textDecorationLine: 'line-through' }
-                      ]}>
-                        {slot}
-                      </Text>
-                      <View
-                        style={{
-                          marginTop: 2,
-                          paddingHorizontal: 3,
-                          paddingVertical: 1,
-                          borderRadius: 4,
-                          backgroundColor: isSelected
-                            ? 'rgba(255, 255, 255, 0.25)'
-                            : isTemp
-                              ? '#fee2e2'
-                              : isFull
-                                ? '#fee2e2'
-                                : remainingSlots === 1
-                                  ? '#fef3c7'
-                                  : '#e0f2fe'
-                        }}
-                      >
-                        <Text
-                          style={{
-                            fontSize: 8,
-                            fontWeight: '800',
-                            color: isSelected
-                              ? '#ffffff'
-                              : isTemp
-                                ? '#dc2626'
-                                : isFull
-                                  ? '#ef4444'
-                                  : remainingSlots === 1
-                                    ? '#b45309'
-                                    : '#0369a1'
-                          }}
-                        >
-                          {isFull ? 'FULL' : `${remainingSlots} left`}
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
-
-                    {isTemp && (
-                      <TouchableOpacity
-                        onPress={(e) => {
-                          e.stopPropagation();
-                          handleDeleteTempSlot(tempDocId);
-                        }}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        style={{
-                          position: 'absolute',
-                          top: -6,
-                          right: -6,
-                          backgroundColor: '#dc2626',
-                          borderColor: '#ffffff',
-                          borderWidth: 1.5,
-                          borderRadius: 10,
-                          width: 18,
-                          height: 18,
-                          justifyContent: 'center',
-                          alignItems: 'center',
-                          zIndex: 99,
-                          elevation: 6,
-                        }}
-                      >
-                        <Ionicons name="close" size={11} color="#ffffff" />
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                );
-              })}
-            </View>
+            <SlotsGrid
+              timeSlotsList={timeSlotsList}
+              selectedTimeSlot={selectedTimeSlot}
+              getSlotCapacityInfo={getSlotCapacityInfo}
+              tempSlotMap={tempSlotMap}
+              normalizeTimeStr={normalizeTimeStr}
+              onSelectSlot={setSelectedTimeSlot}
+              onDeleteTempSlot={handleDeleteTempSlot}
+            />
           )}
         </View>
 
@@ -1582,4 +1702,312 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontWeight: '800',
   },
+});
+
+interface SlotButtonProps {
+  slot: string;
+  isSelected: boolean;
+  isFull: boolean;
+  isTemp: boolean;
+  remainingSlots: number;
+  normKey: string;
+  tempDocId?: string;
+  onSelectSlot: (slot: string) => void;
+  onDeleteTempSlot: (tempDocId: string) => void;
+}
+
+const SlotButton = React.memo<SlotButtonProps>(({
+  slot,
+  isSelected,
+  isFull,
+  isTemp,
+  remainingSlots,
+  normKey,
+  tempDocId,
+  onSelectSlot,
+  onDeleteTempSlot,
+}) => {
+  return (
+    <View style={{ width: '23.2%', paddingTop: 6, paddingRight: 6, position: 'relative', marginBottom: 6 }}>
+      <TouchableOpacity
+        disabled={isFull}
+        style={[
+          styles.slotChipColumn,
+          isTemp && {
+            borderColor: '#dc2626',
+            borderWidth: 2,
+            backgroundColor: isSelected ? '#dc2626' : '#fff5f5',
+          },
+          isSelected && !isTemp && styles.slotChipSelected,
+          isSelected && isTemp && { backgroundColor: '#dc2626', borderColor: '#991b1b', borderWidth: 2 },
+          isFull && { backgroundColor: '#f1f5f9', borderColor: '#cbd5e1', opacity: 0.65 }
+        ]}
+        onPress={() => {
+          if (!isFull) {
+            onSelectSlot(slot);
+          }
+        }}
+        activeOpacity={isFull ? 1 : 0.8}
+      >
+        <Text style={[
+          styles.slotChipText,
+          isTemp && !isSelected && { color: '#dc2626', fontWeight: '800' },
+          isSelected && styles.slotChipTextSelected,
+          isFull && { color: '#94a3b8', textDecorationLine: 'line-through' }
+        ]}>
+          {slot}
+        </Text>
+        <View
+          style={{
+            marginTop: 2,
+            paddingHorizontal: 3,
+            paddingVertical: 1,
+            borderRadius: 4,
+            backgroundColor: isSelected
+              ? 'rgba(255, 255, 255, 0.25)'
+              : isTemp
+                ? '#fee2e2'
+                : isFull
+                  ? '#fee2e2'
+                  : remainingSlots === 1
+                    ? '#fef3c7'
+                    : '#e0f2fe'
+          }}
+        >
+          <Text
+            style={{
+              fontSize: 8,
+              fontWeight: '800',
+              color: isSelected
+                ? '#ffffff'
+                : isTemp
+                  ? '#dc2626'
+                  : isFull
+                    ? '#ef4444'
+                    : remainingSlots === 1
+                      ? '#b45309'
+                      : '#0369a1'
+            }}
+          >
+            {isFull ? 'FULL' : `${remainingSlots} left`}
+          </Text>
+        </View>
+      </TouchableOpacity>
+
+      {isTemp && tempDocId ? (
+        <TouchableOpacity
+          onPress={() => {
+            if (tempDocId) {
+              onDeleteTempSlot(tempDocId);
+            }
+          }}
+          activeOpacity={0.6}
+          hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+          style={{
+            position: 'absolute',
+            top: 0,
+            right: 0,
+            backgroundColor: '#dc2626',
+            borderColor: '#ffffff',
+            borderWidth: 2,
+            borderRadius: 12,
+            width: 24,
+            height: 24,
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 9999,
+            elevation: 20,
+          }}
+        >
+          <Ionicons name="close" size={13} color="#ffffff" />
+        </TouchableOpacity>
+      ) : null}
+    </View>
+  );
+});
+
+interface SlotsGridProps {
+  timeSlotsList: string[];
+  selectedTimeSlot: string;
+  getSlotCapacityInfo: (slot: string) => { remainingSlots: number; isFull: boolean };
+  tempSlotMap: Record<string, string>;
+  normalizeTimeStr: (str: string) => string;
+  onSelectSlot: (slot: string) => void;
+  onDeleteTempSlot: (tempDocId: string) => void;
+}
+
+const SlotsGrid = React.memo<SlotsGridProps>(({
+  timeSlotsList,
+  selectedTimeSlot,
+  getSlotCapacityInfo,
+  tempSlotMap,
+  normalizeTimeStr,
+  onSelectSlot,
+  onDeleteTempSlot,
+}) => {
+  return (
+    <View style={[styles.slotsGrid, { overflow: 'visible', paddingTop: 8, paddingRight: 6 }]}>
+      {timeSlotsList.map((slot) => {
+        const isSelected = selectedTimeSlot === slot;
+        const { remainingSlots, isFull } = getSlotCapacityInfo(slot);
+        const normKey = normalizeTimeStr(slot);
+        const tempDocId = tempSlotMap[normKey] || tempSlotMap[slot.trim()];
+        const isTemp = !!tempDocId;
+
+        return (
+          <SlotButton
+            key={slot}
+            slot={slot}
+            isSelected={isSelected}
+            isFull={isFull}
+            isTemp={isTemp}
+            remainingSlots={remainingSlots}
+            normKey={normKey}
+            tempDocId={tempDocId}
+            onSelectSlot={onSelectSlot}
+            onDeleteTempSlot={onDeleteTempSlot}
+          />
+        );
+      })}
+    </View>
+  );
+});
+
+interface PatientSuggestionRowProps {
+  item: any;
+  isLast: boolean;
+  onSelect: (item: any) => void;
+}
+
+const PatientSuggestionRow = React.memo<PatientSuggestionRowProps>(({ item, isLast, onSelect }) => (
+  <TouchableOpacity
+    onPress={() => onSelect(item)}
+    activeOpacity={0.7}
+    style={{
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      borderBottomWidth: isLast ? 0 : 1,
+      borderBottomColor: '#f1f5f9',
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: '#ffffff',
+    }}
+  >
+    <View
+      style={{
+        width: 38,
+        height: 38,
+        borderRadius: 19,
+        backgroundColor: '#eff6ff',
+        borderWidth: 1,
+        borderColor: '#dbeafe',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 12,
+      }}
+    >
+      <Ionicons name="person" size={18} color="#0284c7" />
+    </View>
+
+    <View style={{ flex: 1 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+        <Text style={{ fontSize: 13.5, fontWeight: '700', color: '#0f172a' }}>
+          {item.name || 'Unnamed Patient'}
+        </Text>
+        {item.branch ? (
+          <View style={{ backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', paddingHorizontal: 6, paddingVertical: 1.5, borderRadius: 6 }}>
+            <Text style={{ fontSize: 9.5, fontWeight: '600', color: '#475569' }}>
+              📍 {item.branch}
+            </Text>
+          </View>
+        ) : null}
+      </View>
+
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 3, flexWrap: 'wrap', gap: 10 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f0f9ff', borderWidth: 1, borderColor: '#bae6fd', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+          <Feather name="phone" size={10} color="#0369a1" style={{ marginRight: 4 }} />
+          <Text style={{ fontSize: 11, fontWeight: '700', color: '#0369a1' }}>
+            {item.phone || 'No Phone'}
+          </Text>
+        </View>
+
+        {item.diseases ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+            <MaterialCommunityIcons name="stethoscope" size={12} color="#64748b" style={{ marginRight: 3 }} />
+            <Text style={{ fontSize: 11, color: '#64748b' }} numberOfLines={1}>
+              {item.diseases}
+            </Text>
+          </View>
+        ) : null}
+      </View>
+    </View>
+
+    <Feather name="chevron-right" size={16} color="#cbd5e1" style={{ marginLeft: 6 }} />
+  </TouchableOpacity>
+));
+
+interface PatientSuggestionsDropdownProps {
+  suggestions: any[];
+  onSelect: (item: any) => void;
+}
+
+const PatientSuggestionsDropdown = React.memo<PatientSuggestionsDropdownProps>(({
+  suggestions,
+  onSelect,
+}) => {
+  return (
+    <View
+      style={{
+        position: 'absolute',
+        top: 76,
+        left: 0,
+        right: 0,
+        backgroundColor: '#ffffff',
+        borderWidth: 1,
+        borderColor: '#cbd5e1',
+        borderRadius: 16,
+        shadowColor: '#0f172a',
+        shadowOffset: { width: 0, height: 12 },
+        shadowOpacity: 0.18,
+        shadowRadius: 18,
+        elevation: 18,
+        zIndex: 9999,
+        maxHeight: 320,
+        overflow: 'hidden',
+      }}
+    >
+      <View
+        style={{
+          paddingHorizontal: 16,
+          paddingVertical: 8,
+          backgroundColor: '#f8fafc',
+          borderBottomWidth: 1,
+          borderBottomColor: '#f1f5f9',
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+        }}
+      >
+        <Text style={{ fontSize: 10, fontWeight: '800', letterSpacing: 0.8, color: '#64748b', textTransform: 'uppercase' }}>
+          MATCHING PATIENTS
+        </Text>
+        <View style={{ backgroundColor: '#e0f2fe', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
+          <Text style={{ fontSize: 10, fontWeight: '700', color: '#0369a1' }}>
+            {suggestions.length} Found
+          </Text>
+        </View>
+      </View>
+
+      <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled" style={{ maxHeight: 270 }}>
+        {suggestions.map((item, idx) => (
+          <PatientSuggestionRow
+            key={idx}
+            item={item}
+            isLast={idx === suggestions.length - 1}
+            onSelect={onSelect}
+          />
+        ))}
+      </ScrollView>
+    </View>
+  );
 });

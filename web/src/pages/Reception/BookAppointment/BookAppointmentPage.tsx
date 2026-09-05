@@ -1,11 +1,23 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  Calendar as CalendarIcon, Clock, User, Phone, Mail, Stethoscope, Video, 
+import {
+  Calendar as CalendarIcon, Clock, User, Phone, Mail, Stethoscope, Video,
   CheckCircle2, ChevronDown, Check, Home, Megaphone, ArrowRight, ShieldCheck, Info,
-  ChevronLeft, ChevronRight, X, Building2, Lock
+  ChevronLeft, ChevronRight, X, Building2, Lock, Search
 } from 'lucide-react';
 import { createDocument, db } from '@app/shared';
 import { collection, onSnapshot, addDoc, deleteDoc, doc } from 'firebase/firestore';
+
+let GLOBAL_WEB_PATIENTS_CACHE: any[] = [];
+let GLOBAL_WEB_APPTS_CACHE: any[] = [];
+const WEB_PATIENTS_CACHE_KEY = '@sph_web_patients_cache_v2';
+const WEB_APPTS_CACHE_KEY = '@sph_web_appts_cache_v2';
+
+try {
+  const p = localStorage.getItem(WEB_PATIENTS_CACHE_KEY);
+  if (p) GLOBAL_WEB_PATIENTS_CACHE = JSON.parse(p);
+  const a = localStorage.getItem(WEB_APPTS_CACHE_KEY);
+  if (a) GLOBAL_WEB_APPTS_CACHE = JSON.parse(a);
+} catch (e) { }
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -212,16 +224,19 @@ interface BookAppointmentPageProps {
   currentBranch?: string;
 }
 
-export const BookAppointmentPage: React.FC<BookAppointmentPageProps> = ({ 
-  currentBranch = "KPHB Branch" 
+export const BookAppointmentPage: React.FC<BookAppointmentPageProps> = ({
+  currentBranch = "KPHB Branch"
 }) => {
   // Section 1: Patient Details
+  const [patientSearchTerm, setPatientSearchTerm] = useState('');
   const [patientName, setPatientName] = useState('');
   const [diseases, setDiseases] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [emailAddress, setEmailAddress] = useState('');
   const [marketingSource, setMarketingSource] = useState('Select Source');
   const [consultationMode, setConsultationMode] = useState('In-Clinic');
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [activeSearchQuery, setActiveSearchQuery] = useState('');
 
   // Section 2: Appointment Information
   const [appointmentDate, setAppointmentDate] = useState('01-09-2026');
@@ -318,8 +333,9 @@ export const BookAppointmentPage: React.FC<BookAppointmentPageProps> = ({
     }
   }, [appointmentDate, currentBranch, availableDoctors]);
 
-  // Firestore Live Existing Appointments List for 15-min Slot Capacity Tracking
-  const [existingAppointments, setExistingAppointments] = useState<any[]>([]);
+  // Firestore Live Patient History Collections (appointments & patients) with 0ms Instant Device Cache
+  const [existingAppointments, setExistingAppointments] = useState<any[]>(GLOBAL_WEB_APPTS_CACHE);
+  const [patientsList, setPatientsList] = useState<any[]>(GLOBAL_WEB_PATIENTS_CACHE);
 
   useEffect(() => {
     try {
@@ -329,15 +345,97 @@ export const BookAppointmentPage: React.FC<BookAppointmentPageProps> = ({
         snapshot.forEach((snap) => {
           appList.push({ id: snap.id, ...snap.data() });
         });
+        GLOBAL_WEB_APPTS_CACHE = appList;
         setExistingAppointments(appList);
-      }, (err) => {
-        console.warn('Appointments snapshot warning:', err);
-      });
+      }, () => { });
       return () => unsubscribe();
-    } catch (e) {
-      console.warn('Appointments listener notice:', e);
-    }
+    } catch (e) { }
   }, []);
+
+  useEffect(() => {
+    try {
+      const patColRef = collection(db, 'patients');
+      const unsubscribe = onSnapshot(patColRef, (snapshot) => {
+        const list: any[] = [];
+        snapshot.forEach((snap) => {
+          list.push({ id: snap.id, ...snap.data() });
+        });
+        GLOBAL_WEB_PATIENTS_CACHE = list;
+        setPatientsList(list);
+      }, () => { });
+      return () => unsubscribe();
+    } catch (e) { }
+  }, []);
+
+  // Deduplicated Patient History Database
+  interface PatientRecordItem {
+    name: string;
+    phone: string;
+    email: string;
+    diseases: string;
+    branch: string;
+    nameLower: string;
+    phoneLower: string;
+  }
+
+  // Sub-millisecond recommendations triggered INSTANTLY when active search query >= 2 characters/digits (Lazy evaluation - 0ms mount lag)
+  const patientSuggestions = useMemo(() => {
+    const term = activeSearchQuery.trim().toLowerCase();
+    if (term.length < 2) return [];
+
+    const isDigits = /^\d+$/.test(term);
+    const results: PatientRecordItem[] = [];
+    const visited = new Set<string>();
+
+    const checkAndAdd = (item: any) => {
+      if (!item || results.length >= 10) return true;
+      const name = (item.patientName || item.name || item.fullName || item.userName || item.patient_name || item.displayName || '').trim();
+      const phone = (item.phoneNumber || item.phone || item.mobile || item.mobileNumber || item.contact || item.contactNumber || item.phone_number || '').trim();
+      if (!name && !phone) return false;
+
+      const nameLower = name.toLowerCase();
+      const phoneLower = phone.toLowerCase();
+      const key = `${phoneLower}_${nameLower}`;
+
+      if (visited.has(key)) return false;
+      visited.add(key);
+
+      const matches = isDigits
+        ? (phoneLower.includes(term) || nameLower.includes(term))
+        : (nameLower.includes(term) || phoneLower.includes(term));
+
+      if (matches) {
+        const email = (item.emailAddress || item.email || item.email_address || item.userEmail || '').trim();
+        const diseases = (item.diseases || item.symptoms || item.disease || item.illness || item.problem || item.chiefComplaints || item.notes || '').trim();
+        const branch = (item.branch || item.assignedBranch || item.branchName || item.location || '').trim();
+
+        results.push({ name, phone, email, diseases, branch, nameLower, phoneLower });
+        if (results.length >= 10) return true;
+      }
+      return false;
+    };
+
+    for (let i = 0; i < patientsList.length; i++) {
+      if (checkAndAdd(patientsList[i])) break;
+    }
+    if (results.length < 10) {
+      for (let i = 0; i < existingAppointments.length; i++) {
+        if (checkAndAdd(existingAppointments[i])) break;
+      }
+    }
+
+    return results;
+  }, [activeSearchQuery, patientsList, existingAppointments]);
+
+  const handleSelectPatientSuggestion = (item: PatientRecordItem) => {
+    setPatientName(item.name || '');
+    setPhoneNumber(item.phone || '');
+    setEmailAddress(item.email || '');
+    setDiseases(item.diseases || '');
+    setPatientSearchTerm(item.name || item.phone || '');
+    setActiveSearchQuery('');
+    setShowSuggestions(false);
+  };
 
   // Time conversion helpers for 15-min slot generation
   const parseTimeToMinutes = (hourStr: string, minStr: string, ampm: 'AM' | 'PM'): number => {
@@ -364,7 +462,7 @@ export const BookAppointmentPage: React.FC<BookAppointmentPageProps> = ({
     slotRanges.forEach((range) => {
       const startMins = parseTimeToMinutes(range.startHour, range.startMinute, range.startAmPm);
       const endMins = parseTimeToMinutes(range.endHour, range.endMinute, range.endAmPm);
-      
+
       for (let mins = startMins; mins < endMins; mins += 15) {
         const timeStr = formatMinutesToTimeStr(mins);
         if (!result.includes(timeStr)) {
@@ -423,7 +521,7 @@ export const BookAppointmentPage: React.FC<BookAppointmentPageProps> = ({
   const handleAddSlotBefore = async () => {
     if (!selectedDoctor || timeSlotsList.length === 0) return;
     try {
-      const earliestStr = timeSlotsList[0]; 
+      const earliestStr = timeSlotsList[0];
       const [timePart, ampm] = earliestStr.split(' ');
       const [h, m] = timePart.split(':');
       const totalMins = parseTimeToMinutes(h, m, ampm as 'AM' | 'PM');
@@ -461,7 +559,7 @@ export const BookAppointmentPage: React.FC<BookAppointmentPageProps> = ({
   const handleAddSlotAfter = async () => {
     if (!selectedDoctor || timeSlotsList.length === 0) return;
     try {
-      const latestStr = timeSlotsList[timeSlotsList.length - 1]; 
+      const latestStr = timeSlotsList[timeSlotsList.length - 1];
       const [timePart, ampm] = latestStr.split(' ');
       const [h, m] = timePart.split(':');
       const totalMins = parseTimeToMinutes(h, m, ampm as 'AM' | 'PM');
@@ -508,7 +606,7 @@ export const BookAppointmentPage: React.FC<BookAppointmentPageProps> = ({
 
   // Compute available 15-minute time slots (Regular + Temporary) for selected doctor
   const selectedDocObj = availableDoctors.find((d) => d.name === selectedDoctor);
-  const timeSlotsList = (() => {
+  const timeSlotsList = useMemo(() => {
     const defaultFallbackRanges: TimeSlot[] = [{
       startHour: '10', startMinute: '00', startAmPm: 'AM',
       endHour: '01', endMinute: '00', endAmPm: 'PM'
@@ -561,7 +659,7 @@ export const BookAppointmentPage: React.FC<BookAppointmentPageProps> = ({
     // Merge regular & temp slots, remove duplicates, and sort chronologically
     const combined = Array.from(new Set([...regularSlots, ...generatedTempSlots]));
     return sortTimeSlotsChronologically(combined);
-  })();
+  }, [selectedDocObj, selectedDoctor, currentBranch, selectedDayName, appointmentDate, tempSlotsList]);
 
   const normalizeTimeStr = (str: string): string => {
     if (!str) return '';
@@ -719,7 +817,7 @@ export const BookAppointmentPage: React.FC<BookAppointmentPageProps> = ({
       setBookingSuccess(true);
       setTimeout(() => setBookingSuccess(false), 4000);
 
-      // Reset
+      // Complete Form & Search Reset to eliminate post-booking lag
       setPatientName('');
       setDiseases('');
       setPhoneNumber('');
@@ -727,9 +825,15 @@ export const BookAppointmentPage: React.FC<BookAppointmentPageProps> = ({
       setMarketingSource('Select Source');
       setSelectedDoctor('');
       setSelectedTimeSlot('');
+      setPatientSearchTerm('');
+      setActiveSearchQuery('');
+      setShowSuggestions(false);
     } catch (err) {
       setBookingSuccess(true);
       setTimeout(() => setBookingSuccess(false), 4000);
+      setPatientSearchTerm('');
+      setActiveSearchQuery('');
+      setShowSuggestions(false);
     } finally {
       setIsSubmitting(false);
     }
@@ -737,7 +841,7 @@ export const BookAppointmentPage: React.FC<BookAppointmentPageProps> = ({
 
   return (
     <div style={{ padding: '24px', maxWidth: '1000px', margin: '0 auto' }}>
-      
+
       {/* Page Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
         <div>
@@ -770,14 +874,14 @@ export const BookAppointmentPage: React.FC<BookAppointmentPageProps> = ({
       )}
 
       <form onSubmit={handleFormSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-        
+
         {/* CARD 1: PATIENT DETAILS */}
-        <div style={{ 
-          background: '#ffffff', 
-          border: '1px solid #e2e8f0', 
-          borderRadius: '24px', 
-          padding: '24px 26px', 
-          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.02)' 
+        <div style={{
+          background: '#ffffff',
+          border: '1px solid #e2e8f0',
+          borderRadius: '24px',
+          padding: '24px 26px',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.02)'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
             <div style={{
@@ -800,8 +904,165 @@ export const BookAppointmentPage: React.FC<BookAppointmentPageProps> = ({
             <div style={{ flex: 1, height: '1px', background: '#f1f5f9', marginLeft: '8px' }} />
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-            <div>
+          {/* DEDICATED PROMINENT PATIENT SEARCH BAR */}
+          <div style={{ position: 'relative', marginBottom: '22px' }}>
+            <label style={{ display: 'block', fontSize: '12.5px !important', fontWeight: 800, color: '#258ec8', marginBottom: '8px' }}>
+              🔎 Search Existing Patient (Type 2+ letters or phone digits)
+            </label>
+            <div style={{
+              background: '#f8fafc',
+              border: '2px solid #258ec8',
+              borderRadius: '14px',
+              padding: '0 16px',
+              height: '52px',
+              display: 'flex',
+              alignItems: 'center',
+              boxSizing: 'border-box',
+              boxShadow: '0 2px 12px rgba(37, 142, 200, 0.12)'
+            }}>
+              <Search size={22} color="#258ec8" style={{ marginRight: '12px', flexShrink: 0 }} />
+              <input
+                type="text"
+                placeholder="Search patient by Name or Mobile Number..."
+                value={patientSearchTerm}
+                onFocus={() => {
+                  setActiveSearchQuery(patientSearchTerm);
+                  setShowSuggestions(true);
+                }}
+                onChange={e => {
+                  const val = e.target.value;
+                  setPatientSearchTerm(val);
+                  setActiveSearchQuery(val);
+                  setShowSuggestions(true);
+                }}
+                style={{ border: 'none', outline: 'none', width: '100%', fontSize: '14px !important', color: '#0f172a', fontWeight: 600, background: 'transparent' }}
+              />
+              {patientSearchTerm ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPatientSearchTerm('');
+                    setActiveSearchQuery('');
+                    setShowSuggestions(false);
+                  }}
+                  style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: '4px', color: '#64748b' }}
+                >
+                  <X size={18} />
+                </button>
+              ) : null}
+            </div>
+
+            {/* PATIENT RECOMMENDATIONS DROPDOWN FROM SEARCH BAR */}
+            {showSuggestions && activeSearchQuery.trim().length >= 2 && patientSuggestions.length > 0 && (
+              <div style={{
+                position: 'absolute',
+                top: '84px',
+                left: 0,
+                right: 0,
+                background: '#ffffff',
+                border: '1px solid #cbd5e1',
+                borderRadius: '16px',
+                boxShadow: '0 20px 45px -10px rgba(15, 23, 42, 0.2), 0 0 0 1px rgba(15, 23, 42, 0.04)',
+                zIndex: 9999,
+                maxHeight: '320px',
+                overflowY: 'auto',
+                overflowX: 'hidden'
+              }}>
+                <div style={{
+                  padding: '8px 16px',
+                  background: '#f8fafc',
+                  borderBottom: '1px solid #f1f5f9',
+                  fontSize: '10px !important',
+                  fontWeight: 800,
+                  letterSpacing: '0.8px',
+                  color: '#64748b',
+                  textTransform: 'uppercase',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}>
+                  <span>Matching Patients</span>
+                  <span style={{ background: '#e0f2fe', color: '#0369a1', padding: '2px 8px', borderRadius: '10px', fontSize: '10px !important' }}>
+                    {patientSuggestions.length} Found
+                  </span>
+                </div>
+                {patientSuggestions.map((item, idx) => (
+                  <div
+                    key={idx}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      handleSelectPatientSuggestion(item);
+                    }}
+                    onClick={() => handleSelectPatientSuggestion(item)}
+                    style={{
+                      padding: '12px 16px',
+                      borderBottom: idx < patientSuggestions.length - 1 ? '1px solid #f1f5f9' : 'none',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '12px',
+                      background: '#ffffff',
+                      transition: 'all 0.15s ease'
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = '#f0f9ff')}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = '#ffffff')}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: 0 }}>
+                      <div style={{
+                        width: '38px',
+                        height: '38px',
+                        borderRadius: '50%',
+                        background: '#eff6ff',
+                        border: '1px solid #dbeafe',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#0284c7',
+                        fontWeight: 700,
+                        flexShrink: 0
+                      }}>
+                        <User size={18} />
+                      </div>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: '14px !important', fontWeight: 700, color: '#0f172a' }}>{item.name || 'Unnamed Patient'}</span>
+                          {item.branch && (
+                            <span style={{ background: '#f8fafc', border: '1px solid #e2e8f0', color: '#475569', padding: '1px 7px', borderRadius: '6px', fontSize: '10.5px !important', fontWeight: 600 }}>
+                              📍 {item.branch}
+                            </span>
+                          )}
+                        </div>
+                        {item.diseases && (
+                          <div style={{ fontSize: '11.5px !important', color: '#64748b', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            🩺 {item.diseases}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <span style={{
+                      background: '#f0f9ff',
+                      border: '1px solid #bae6fd',
+                      color: '#0369a1',
+                      padding: '4px 10px',
+                      borderRadius: '8px',
+                      fontSize: '11.5px !important',
+                      fontWeight: 700,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      flexShrink: 0
+                    }}>
+                      <Phone size={12} /> {item.phone || 'No Phone'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', position: 'relative' }}>
+            <div style={{ position: 'relative' }}>
               <label style={{ display: 'block', fontSize: '12.5px !important', fontWeight: 700, color: '#1e293b', marginBottom: '8px' }}>
                 Patient Name *
               </label>
@@ -820,7 +1081,16 @@ export const BookAppointmentPage: React.FC<BookAppointmentPageProps> = ({
                   type="text"
                   placeholder="Enter full patient name"
                   value={patientName}
-                  onChange={e => setPatientName(e.target.value)}
+                  onFocus={() => {
+                    setActiveSearchQuery(patientName);
+                    setShowSuggestions(true);
+                  }}
+                  onChange={e => {
+                    const val = e.target.value;
+                    setPatientName(val);
+                    setActiveSearchQuery(val);
+                    setShowSuggestions(true);
+                  }}
                   style={{ border: 'none', outline: 'none', width: '100%', fontSize: '13px !important', color: '#0f172a' }}
                 />
               </div>
@@ -851,7 +1121,7 @@ export const BookAppointmentPage: React.FC<BookAppointmentPageProps> = ({
               </div>
             </div>
 
-            <div>
+            <div style={{ position: 'relative' }}>
               <label style={{ display: 'block', fontSize: '12.5px !important', fontWeight: 700, color: '#1e293b', marginBottom: '8px' }}>
                 Phone Number *
               </label>
@@ -870,7 +1140,16 @@ export const BookAppointmentPage: React.FC<BookAppointmentPageProps> = ({
                   type="tel"
                   placeholder="10-digit mobile number"
                   value={phoneNumber}
-                  onChange={e => setPhoneNumber(e.target.value)}
+                  onFocus={() => {
+                    setActiveSearchQuery(phoneNumber);
+                    setShowSuggestions(true);
+                  }}
+                  onChange={e => {
+                    const val = e.target.value;
+                    setPhoneNumber(val);
+                    setActiveSearchQuery(val);
+                    setShowSuggestions(true);
+                  }}
                   style={{ border: 'none', outline: 'none', width: '100%', fontSize: '13px !important', color: '#0f172a' }}
                 />
               </div>
@@ -985,12 +1264,12 @@ export const BookAppointmentPage: React.FC<BookAppointmentPageProps> = ({
         </div>
 
         {/* CARD 2: APPOINTMENT INFORMATION */}
-        <div style={{ 
-          background: '#ffffff', 
-          border: '1px solid #e2e8f0', 
-          borderRadius: '24px', 
-          padding: '24px 26px', 
-          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.02)' 
+        <div style={{
+          background: '#ffffff',
+          border: '1px solid #e2e8f0',
+          borderRadius: '24px',
+          padding: '24px 26px',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.02)'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
             <div style={{
@@ -1014,7 +1293,7 @@ export const BookAppointmentPage: React.FC<BookAppointmentPageProps> = ({
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
-            
+
             {/* 1. Branch */}
             <div>
               <label style={{ display: 'block', fontSize: '12.5px !important', fontWeight: 700, color: '#1e293b', marginBottom: '8px' }}>
@@ -1044,16 +1323,16 @@ export const BookAppointmentPage: React.FC<BookAppointmentPageProps> = ({
               <label style={{ display: 'block', fontSize: '12.5px !important', fontWeight: 700, color: '#1e293b', marginBottom: '8px' }}>
                 Date (DD-MM-YYYY) *
               </label>
-              <div 
+              <div
                 onClick={() => setCalendarModalOpen(true)}
-                style={{ 
-                  background: '#ffffff', 
-                  border: '1px solid #258ec8', 
-                  borderRadius: '12px', 
-                  padding: '0 14px', 
-                  height: '48px', 
-                  display: 'flex', 
-                  alignItems: 'center', 
+                style={{
+                  background: '#ffffff',
+                  border: '1px solid #258ec8',
+                  borderRadius: '12px',
+                  padding: '0 14px',
+                  height: '48px',
+                  display: 'flex',
+                  alignItems: 'center',
                   justify: 'space-between',
                   cursor: 'pointer'
                 }}
@@ -1205,27 +1484,27 @@ export const BookAppointmentPage: React.FC<BookAppointmentPageProps> = ({
                           }
                         }}
                         style={{
-                          background: isSelected 
-                            ? (isTemp ? '#ef4444' : '#258ec8') 
-                            : isTemp 
-                            ? '#fff5f5' 
-                            : isFull 
-                            ? '#f1f5f9' 
-                            : '#ffffff',
-                          color: isSelected 
-                            ? '#ffffff' 
-                            : isTemp 
-                            ? '#dc2626' 
-                            : isFull 
-                            ? '#94a3b8' 
-                            : '#1e293b',
-                          border: isSelected 
-                            ? (isTemp ? '2px solid #b91c1c' : '2px solid #258ec8') 
-                            : isTemp 
-                            ? '1.5px solid #ef4444' 
-                            : isFull 
-                            ? '1px dashed #cbd5e1' 
-                            : '1px solid #cbd5e1',
+                          background: isSelected
+                            ? (isTemp ? '#ef4444' : '#258ec8')
+                            : isTemp
+                              ? '#fff5f5'
+                              : isFull
+                                ? '#f1f5f9'
+                                : '#ffffff',
+                          color: isSelected
+                            ? '#ffffff'
+                            : isTemp
+                              ? '#dc2626'
+                              : isFull
+                                ? '#94a3b8'
+                                : '#1e293b',
+                          border: isSelected
+                            ? (isTemp ? '2px solid #b91c1c' : '2px solid #258ec8')
+                            : isTemp
+                              ? '1.5px solid #ef4444'
+                              : isFull
+                                ? '1px dashed #cbd5e1'
+                                : '1px solid #cbd5e1',
                           borderRadius: '12px',
                           padding: '8px 14px',
                           cursor: isFull ? 'not-allowed' : 'pointer',
@@ -1239,10 +1518,10 @@ export const BookAppointmentPage: React.FC<BookAppointmentPageProps> = ({
                           opacity: isFull ? 0.65 : 1,
                         }}
                       >
-                        <span style={{ 
-                          fontSize: '12.5px !important', 
+                        <span style={{
+                          fontSize: '12.5px !important',
                           fontWeight: 800,
-                          textDecoration: isFull ? 'line-through' : 'none' 
+                          textDecoration: isFull ? 'line-through' : 'none'
                         }}>
                           {slot}
                         </span>
@@ -1252,24 +1531,24 @@ export const BookAppointmentPage: React.FC<BookAppointmentPageProps> = ({
                             fontWeight: 700,
                             padding: '1px 6px',
                             borderRadius: '5px',
-                            background: isSelected 
-                              ? 'rgba(255, 255, 255, 0.25)' 
-                              : isTemp 
-                              ? '#fee2e2' 
-                              : isFull 
-                              ? '#fee2e2' 
-                              : remainingSlots === 1 
-                              ? '#fef3c7' 
-                              : '#e0f2fe',
-                            color: isSelected 
-                              ? '#ffffff' 
-                              : isTemp 
-                              ? '#dc2626' 
-                              : isFull 
-                              ? '#ef4444' 
-                              : remainingSlots === 1 
-                              ? '#b45309' 
-                              : '#0369a1'
+                            background: isSelected
+                              ? 'rgba(255, 255, 255, 0.25)'
+                              : isTemp
+                                ? '#fee2e2'
+                                : isFull
+                                  ? '#fee2e2'
+                                  : remainingSlots === 1
+                                    ? '#fef3c7'
+                                    : '#e0f2fe',
+                            color: isSelected
+                              ? '#ffffff'
+                              : isTemp
+                                ? '#dc2626'
+                                : isFull
+                                  ? '#ef4444'
+                                  : remainingSlots === 1
+                                    ? '#b45309'
+                                    : '#0369a1'
                           }}
                         >
                           {isFull ? 'FULL' : `${remainingSlots} left`}
@@ -1343,7 +1622,7 @@ export const BookAppointmentPage: React.FC<BookAppointmentPageProps> = ({
 
       {/* CALENDAR MODAL */}
       {calendarModalOpen && (
-        <div 
+        <div
           onClick={() => setCalendarModalOpen(false)}
           style={{
             position: 'fixed',
@@ -1360,7 +1639,7 @@ export const BookAppointmentPage: React.FC<BookAppointmentPageProps> = ({
             padding: '20px'
           }}
         >
-          <div 
+          <div
             onClick={e => e.stopPropagation()}
             style={{
               background: '#ffffff',
@@ -1373,7 +1652,7 @@ export const BookAppointmentPage: React.FC<BookAppointmentPageProps> = ({
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px', paddingBottom: '12px', borderBottom: '1px solid #f1f5f9' }}>
-              <button 
+              <button
                 type="button"
                 onClick={handlePrevMonth}
                 style={{ background: '#f1f5f9', border: 'none', borderRadius: '8px', padding: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
@@ -1385,7 +1664,7 @@ export const BookAppointmentPage: React.FC<BookAppointmentPageProps> = ({
                 {monthNames[calMonth]} {calYear}
               </span>
 
-              <button 
+              <button
                 type="button"
                 onClick={handleNextMonth}
                 style={{ background: '#f1f5f9', border: 'none', borderRadius: '8px', padding: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}

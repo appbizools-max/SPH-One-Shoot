@@ -69,10 +69,16 @@ export const ReceptionDashboardPage: React.FC<ReceptionDashboardPageProps> = ({ 
 
   const [selectedDate, setSelectedDate] = useState<string>(getTodayISO());
 
-  const isMatchingDate = (appDate?: string) => {
-    if (!appDate) return false;
-    const clean = appDate.trim();
-    if (!clean) return false;
+  const isMatchingDate = (a: any) => {
+    const rawDate = a.appointmentDate || a.date || a.bookingDate;
+    if (!rawDate) {
+      // If document has no explicit date, show on Today's dashboard
+      return selectedDate === getTodayISO();
+    }
+    const clean = String(rawDate).trim();
+    if (!clean) {
+      return selectedDate === getTodayISO();
+    }
 
     if (clean === selectedDate || clean.startsWith(selectedDate)) return true;
 
@@ -87,32 +93,33 @@ export const ReceptionDashboardPage: React.FC<ReceptionDashboardPageProps> = ({ 
     return false;
   };
 
-  const isMatchingBranch = (appBranch?: string) => {
+  const isMatchingBranch = (a: any) => {
     if (!currentBranch || currentBranch === 'All Branches') return true;
-    if (!appBranch) return true;
-    const normAppBranch = appBranch.toLowerCase().replace(/\s*branch\s*/i, '').trim();
-    const normCurrentBranch = currentBranch.toLowerCase().replace(/\s*branch\s*/i, '').trim();
+    const appBranch = a.branch || a.targetBranch || a.branchName;
+    if (!appBranch) return true; // Show if document has no explicit branch set
+    const normAppBranch = String(appBranch).toLowerCase().replace(/\s*branch\s*/i, '').trim();
+    const normCurrentBranch = String(currentBranch).toLowerCase().replace(/\s*branch\s*/i, '').trim();
     return normAppBranch.includes(normCurrentBranch) || normCurrentBranch.includes(normAppBranch);
   };
 
   // Filter ONLY appointments for the selected date AND current branch
   const filteredBranchDateAppointments = appointments.filter(a => {
-    return isMatchingDate(a.appointmentDate) && isMatchingBranch(a.branch);
+    return isMatchingDate(a) && isMatchingBranch(a);
   });
 
   // Filter lists for 3 sections (Selected Date & Branch ONLY)
   const upcomingList = filteredBranchDateAppointments.filter(a => {
-    const st = (a.status || '').toLowerCase();
-    return st === 'scheduled' || st === 'confirmed' || st === 'waiting' || (!st || (st !== 'in-consultation' && st !== 'active' && st !== 'completed' && st !== 'cancelled'));
+    const st = (a.status || 'scheduled').toLowerCase().trim();
+    return st === 'scheduled' || st === 'confirmed' || st === 'waiting' || st === 'pending' || (st !== 'in-consultation' && st !== 'active' && st !== 'completed' && st !== 'cancelled');
   });
 
   const activeList = filteredBranchDateAppointments.filter(a => {
-    const st = (a.status || '').toLowerCase();
+    const st = (a.status || '').toLowerCase().trim();
     return st === 'in-consultation' || st === 'active' || st === 'consulting';
   });
 
   const completedList = filteredBranchDateAppointments.filter(a => {
-    const st = (a.status || '').toLowerCase();
+    const st = (a.status || '').toLowerCase().trim();
     return st === 'completed' || st === 'concluded' || st === 'finished';
   });
 

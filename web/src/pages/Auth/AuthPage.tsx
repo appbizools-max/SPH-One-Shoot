@@ -6,6 +6,7 @@ import { auth, db, UserRole } from '@app/shared';
 
 export interface WebLoginSuccessData {
   role: UserRole;
+  userName?: string;
   branchName: string;
   branchPhone: string;
 }
@@ -24,7 +25,7 @@ export const AUTHORIZED_WEB_BRANCHES: Record<string, { name: string; phone: stri
 const KNOWN_DOCTOR_PHONES = ['8125260176', '9903119766', '9490808582', '1111111111'];
 
 export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
-  const [activeRole, setActiveRole] = useState<'admin' | 'hr' | 'doctor' | 'staff' | 'reception' | 'otp'>('admin');
+  const [activeRole, setActiveRole] = useState<'otp' | 'email'>('otp');
   const [emailOrUsername, setEmailOrUsername] = useState('admin@gmail.com');
   const [password, setPassword] = useState('admin123');
   const [showPassword, setShowPassword] = useState(false);
@@ -70,6 +71,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
           const data = docSnap.docs[0].data();
           return {
             role: 'doctor',
+            userName: data.name || 'Dr. Homeopathy Physician',
             branchName: data.branch || 'Medical Center',
             branchPhone: digits,
           };
@@ -81,6 +83,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
           const data = staffSnap.docs[0].data();
           return {
             role: 'staff',
+            userName: data.name || 'Staff Member',
             branchName: data.branch || 'KPHB Branch',
             branchPhone: digits,
           };
@@ -89,20 +92,37 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
     }
 
     // 2. Doctor Phone / Text check
+    if (digits.includes('8125260176') || lower.includes('prashanth')) {
+      return { role: 'doctor', userName: 'Dr. Prashanth K Vaidya', branchName: 'KPHB Branch', branchPhone: '+91 81252 60176' };
+    }
+    if (digits.includes('9903119766') || lower.includes('jobedah') || lower.includes('parveez')) {
+      return { role: 'doctor', userName: 'Dr. Jobedah Parveez', branchName: 'Nallagandla Branch', branchPhone: '+91 99031 19766' };
+    }
+    if (digits.includes('9490808582') || lower.includes('padma')) {
+      return { role: 'doctor', userName: 'Dr. Padma Priya', branchName: 'Chandanagar Branch', branchPhone: '+91 94908 08582' };
+    }
+    if (digits.includes('1111111111') || lower.includes('chanduri')) {
+      return { role: 'doctor', userName: 'Dr. Ramakrishna Chanduri', branchName: 'Dilshuknagar Branch', branchPhone: '+91 11111 11111' };
+    }
+    if (digits.includes('9804176176') || lower.includes('ramakrishna') || lower.includes('rama krishna')) {
+      return { role: 'doctor', userName: 'Dr. CH. Rama Krishna', branchName: 'Dilshuknagar Branch', branchPhone: '+91 98041 76176' };
+    }
+
     if (KNOWN_DOCTOR_PHONES.some(p => digits.includes(p)) || lower.includes('doctor') || lower.includes('dr.')) {
       return {
         role: 'doctor',
+        userName: 'Dr. Homeopathy Physician',
         branchName: 'Medical Center',
-        branchPhone: digits || '8125260176',
+        branchPhone: digits || '+91 81252 60176',
       };
     }
 
     // 3. Admin / HR
     if (lower.includes('admin') || digits === '9000000001') {
-      return { role: 'admin', branchName: 'HQ / Admin Office', branchPhone: '+91 90000 00001' };
+      return { role: 'admin', userName: 'Admin Control Hub', branchName: 'HQ / Admin Office', branchPhone: '+91 90000 00001' };
     }
     if (lower.includes('hr') || digits === '9000000002') {
-      return { role: 'hr', branchName: 'HQ / HR Department', branchPhone: '+91 90000 00002' };
+      return { role: 'hr', userName: 'HR Department', branchName: 'HQ / HR Department', branchPhone: '+91 90000 00002' };
     }
 
     // 4. Reception Branch matching
@@ -128,55 +148,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
     setErrorMessage('');
     setIsLoading(true);
 
-    if (activeRole === 'admin') {
-      if (onLoginSuccess) {
-        onLoginSuccess({
-          role: 'admin',
-          branchName: 'HQ / Admin Office',
-          branchPhone: '+91 90000 00001',
-        });
-      }
-      setIsLoading(false);
-      return;
-    }
-
-    if (activeRole === 'hr') {
-      if (onLoginSuccess) {
-        onLoginSuccess({
-          role: 'hr',
-          branchName: 'HQ / HR Department',
-          branchPhone: '+91 90000 00002',
-        });
-      }
-      setIsLoading(false);
-      return;
-    }
-
-    if (activeRole === 'doctor') {
-      if (onLoginSuccess) {
-        onLoginSuccess({
-          role: 'doctor',
-          branchName: 'Medical Center',
-          branchPhone: '+91 81252 60176',
-        });
-      }
-      setIsLoading(false);
-      return;
-    }
-
-    if (activeRole === 'staff') {
-      if (onLoginSuccess) {
-        onLoginSuccess({
-          role: 'staff',
-          branchName: 'KPHB Branch',
-          branchPhone: '+91 90000 00004',
-        });
-      }
-      setIsLoading(false);
-      return;
-    }
-
-    // Dynamic resolution or Receptionist Branch Login
     const authData = await detectWebRoleAndBranch(emailOrUsername);
     if (onLoginSuccess) {
       onLoginSuccess(authData);
@@ -256,55 +227,72 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
             color: '#94a3b8',
             fontWeight: 500
           }}>
-            Doctor, Staff, HR & Receptionist Portal
+            Doctor, Staff, HR, Reception & Admin Portal
           </p>
         </div>
 
-        {/* Role Navigation Switcher */}
+        {/* 2 Segmented Login Mode Switcher */}
         <div style={{
           display: 'flex',
-          justifyContent: 'center',
-          gap: '8px',
-          marginBottom: '24px',
-          borderBottom: '1px solid #f1f5f9',
-          paddingBottom: '12px',
-          flexWrap: 'wrap'
+          background: '#f1f5f9',
+          borderRadius: '12px',
+          padding: '4px',
+          marginBottom: '24px'
         }}>
-          {[
-            { id: 'admin', label: 'Admin' },
-            { id: 'hr', label: 'HR' },
-            { id: 'doctor', label: 'Doctor' },
-            { id: 'staff', label: 'Staff' },
-            { id: 'reception', label: 'Reception' },
-            { id: 'otp', label: 'Mobile OTP' },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => {
-                setActiveRole(tab.id as any);
-                setErrorMessage('');
-                if (tab.id === 'admin') setEmailOrUsername('admin@gmail.com');
-                else if (tab.id === 'hr') setEmailOrUsername('hr@spiritualhomeo.com');
-                else if (tab.id === 'doctor') setEmailOrUsername('dr.prashanth@spiritualhomeo.com');
-                else if (tab.id === 'staff') setEmailOrUsername('staff@spiritualhomeo.com');
-                else if (tab.id === 'reception') setEmailOrUsername('kphb@spiritualhomeo.com');
-              }}
-              style={{
-                background: activeRole === tab.id ? '#eef5fc' : 'transparent',
-                border: activeRole === tab.id ? '1px solid #258ec8' : '1px solid transparent',
-                borderRadius: '8px',
-                padding: '5px 10px',
-                fontSize: '12px !important',
-                fontWeight: activeRole === tab.id ? 800 : 600,
-                color: activeRole === tab.id ? '#258ec8' : '#64748b',
-                cursor: 'pointer',
-                transition: 'all 0.15s ease'
-              }}
-            >
-              {tab.label}
-            </button>
-          ))}
+          <button
+            type="button"
+            onClick={() => {
+              setActiveRole('otp');
+              setErrorMessage('');
+            }}
+            style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+              padding: '10px 12px',
+              borderRadius: '9px',
+              border: 'none',
+              background: activeRole === 'otp' ? '#ffffff' : 'transparent',
+              color: activeRole === 'otp' ? '#258ec8' : '#64748b',
+              fontWeight: activeRole === 'otp' ? 800 : 600,
+              fontSize: '13px',
+              cursor: 'pointer',
+              boxShadow: activeRole === 'otp' ? '0 2px 8px rgba(0,0,0,0.06)' : 'none',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            <Phone size={15} color={activeRole === 'otp' ? '#258ec8' : '#64748b'} />
+            Mobile OTP (Doctor/Staff/Reception)
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveRole('email');
+              setErrorMessage('');
+            }}
+            style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+              padding: '10px 12px',
+              borderRadius: '9px',
+              border: 'none',
+              background: activeRole === 'email' ? '#ffffff' : 'transparent',
+              color: activeRole === 'email' ? '#258ec8' : '#64748b',
+              fontWeight: activeRole === 'email' ? 800 : 600,
+              fontSize: '13px',
+              cursor: 'pointer',
+              boxShadow: activeRole === 'email' ? '0 2px 8px rgba(0,0,0,0.06)' : 'none',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            <Mail size={15} color={activeRole === 'email' ? '#258ec8' : '#64748b'} />
+            Email (Admin/HR)
+          </button>
         </div>
 
         {/* Error Notification Alert */}
@@ -328,11 +316,73 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
         ) : null}
 
         {/* Form Body */}
-        {activeRole !== 'otp' ? (
+        {activeRole === 'otp' ? (
+          <form onSubmit={!otpSent ? handleSendOtp : handleOtpSignIn} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '12.5px !important', fontWeight: 700, color: '#475569', marginBottom: '8px' }}>
+                Mobile Number (Doctor, Staff & Reception)
+              </label>
+              <div style={{ display: 'flex', alignItems: 'center', background: '#eef5fc', borderRadius: '10px', padding: '0 14px', height: '46px', border: '1px solid #e0ecf8' }}>
+                <Phone size={16} color="#64748b" style={{ marginRight: '12px' }} />
+                <input
+                  type="tel"
+                  value={mobileNumber}
+                  onChange={e => setMobileNumber(e.target.value)}
+                  placeholder="e.g. 8125260176 or 9030176176"
+                  style={{ background: 'transparent', border: 'none', outline: 'none', width: '100%', fontSize: '13px !important', color: '#0f172a', fontWeight: 500 }}
+                  required
+                />
+              </div>
+            </div>
+
+            {otpSent && (
+              <div>
+                <label style={{ display: 'block', fontSize: '12.5px !important', fontWeight: 700, color: '#475569', marginBottom: '8px' }}>
+                  Verification OTP
+                </label>
+                <div style={{ display: 'flex', alignItems: 'center', background: '#eef5fc', borderRadius: '10px', padding: '0 14px', height: '46px', border: '1px solid #e0ecf8' }}>
+                  <Lock size={16} color="#64748b" style={{ marginRight: '12px' }} />
+                  <input
+                    type="text"
+                    value={otpCode}
+                    onChange={e => setOtpCode(e.target.value)}
+                    placeholder="Enter 6-digit OTP"
+                    style={{ background: 'transparent', border: 'none', outline: 'none', width: '100%', fontSize: '13px !important', color: '#0f172a', fontWeight: 500 }}
+                    required
+                  />
+                </div>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={isLoading}
+              style={{
+                background: '#258ec8',
+                color: '#ffffff',
+                border: 'none',
+                height: '46px',
+                borderRadius: '10px',
+                fontSize: '14.5px !important',
+                fontWeight: 800,
+                cursor: 'pointer',
+                marginTop: '8px',
+                boxShadow: '0 4px 14px rgba(37, 142, 200, 0.25)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px'
+              }}
+            >
+              {isLoading ? <Loader2 size={18} className="animate-spin" /> : <ShieldCheck size={18} color="#ffffff" />}
+              {!otpSent ? 'Send Verification OTP' : 'Verify & Sign In'}
+            </button>
+          </form>
+        ) : (
           <form onSubmit={handleSignIn} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div>
               <label style={{ display: 'block', fontSize: '12.5px !important', fontWeight: 700, color: '#475569', marginBottom: '8px' }}>
-                {activeRole === 'admin' ? 'Admin Email Address' : activeRole === 'hr' ? 'HR Email Address' : 'Receptionist Email / Phone'}
+                Management Email Address (Admin / HR)
               </label>
               <div style={{ display: 'flex', alignItems: 'center', background: '#eef5fc', borderRadius: '10px', padding: '0 14px', height: '46px', border: '1px solid #e0ecf8' }}>
                 <Mail size={16} color="#64748b" style={{ marginRight: '12px' }} />
@@ -340,7 +390,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
                   type="text"
                   value={emailOrUsername}
                   onChange={e => setEmailOrUsername(e.target.value)}
-                  placeholder={activeRole === 'admin' ? 'e.g. admin@gmail.com' : activeRole === 'hr' ? 'e.g. hr@spiritualhomeo.com' : 'e.g. kphb@spiritualhomeo.com'}
+                  placeholder="e.g. admin@gmail.com or hr@spiritualhomeo.com"
                   style={{ background: 'transparent', border: 'none', outline: 'none', width: '100%', fontSize: '13px !important', color: '#0f172a', fontWeight: 500 }}
                   required
                 />
@@ -392,68 +442,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
               }}
             >
               {isLoading ? <Loader2 size={18} className="animate-spin" /> : <ShieldCheck size={18} color="#ffffff" />}
-              {activeRole === 'admin' ? 'Sign In to Admin Control Hub' : activeRole === 'hr' ? 'Sign In to HR Portal' : 'Sign In to Reception Desk'}
-            </button>
-          </form>
-        ) : (
-          <form onSubmit={!otpSent ? handleSendOtp : handleOtpSignIn} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '12.5px !important', fontWeight: 700, color: '#475569', marginBottom: '8px' }}>
-                Receptionist Mobile Number
-              </label>
-              <div style={{ display: 'flex', alignItems: 'center', background: '#eef5fc', borderRadius: '10px', padding: '0 14px', height: '46px', border: '1px solid #e0ecf8' }}>
-                <Phone size={16} color="#64748b" style={{ marginRight: '12px' }} />
-                <input
-                  type="tel"
-                  value={mobileNumber}
-                  onChange={e => setMobileNumber(e.target.value)}
-                  placeholder="e.g. 9030176176"
-                  style={{ background: 'transparent', border: 'none', outline: 'none', width: '100%', fontSize: '13px !important', color: '#0f172a', fontWeight: 500 }}
-                  required
-                />
-              </div>
-            </div>
-
-            {otpSent && (
-              <div>
-                <label style={{ display: 'block', fontSize: '12.5px !important', fontWeight: 700, color: '#475569', marginBottom: '8px' }}>
-                  Verification OTP
-                </label>
-                <div style={{ display: 'flex', alignItems: 'center', background: '#eef5fc', borderRadius: '10px', padding: '0 14px', height: '46px', border: '1px solid #e0ecf8' }}>
-                  <Lock size={16} color="#64748b" style={{ marginRight: '12px' }} />
-                  <input
-                    type="text"
-                    value={otpCode}
-                    onChange={e => setOtpCode(e.target.value)}
-                    placeholder="Enter 6-digit OTP"
-                    style={{ background: 'transparent', border: 'none', outline: 'none', width: '100%', fontSize: '13px !important', color: '#0f172a', fontWeight: 500 }}
-                    required
-                  />
-                </div>
-              </div>
-            )}
-
-            <button
-              type="submit"
-              style={{
-                background: '#258ec8',
-                color: '#ffffff',
-                border: 'none',
-                height: '46px',
-                borderRadius: '10px',
-                fontSize: '14.5px !important',
-                fontWeight: 800,
-                cursor: 'pointer',
-                marginTop: '8px',
-                boxShadow: '0 4px 14px rgba(37, 142, 200, 0.25)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px'
-              }}
-            >
-              <ShieldCheck size={18} color="#ffffff" />
-              {!otpSent ? 'Send Verification OTP' : 'Verify & Sign In'}
+              Sign In to Management Portal
             </button>
           </form>
         )}

@@ -29,6 +29,19 @@ import { UserRole, signOutUser } from '@app/shared';
 
 const MOBILE_AUTH_KEY = '@sph_auth_session';
 
+const resolveDoctorName = (phone: string, storedName?: string): string => {
+  if (storedName && storedName.trim() && storedName !== 'Dr. Homeopathy Physician' && storedName !== 'Dr. Physician') {
+    return storedName;
+  }
+  const digits = (phone || '').replace(/\D/g, '');
+  if (digits.includes('8125260176')) return 'Dr. Prashanth K Vaidya';
+  if (digits.includes('9903119766')) return 'Dr. Jobedah Parveez';
+  if (digits.includes('9490808582')) return 'Dr. Padma Priya';
+  if (digits.includes('1111111111')) return 'Dr. Ramakrishna Chanduri';
+  if (digits.includes('9804176176')) return 'Dr. CH. Rama Krishna';
+  return storedName || 'Homeopathy Physician';
+};
+
 export default function App() {
   const [activeTab, setActiveTab] = useState<string>('auth');
   const [tabHistory, setTabHistory] = useState<string[]>([]);
@@ -36,6 +49,7 @@ export default function App() {
   const [userRole, setUserRole] = useState<UserRole>('reception');
 
   // Authenticated User Branch State (Branch-Locked)
+  const [userName, setUserName] = useState('');
   const [branchName, setBranchName] = useState('Nallagandla');
   const [branchPhone, setBranchPhone] = useState('9553176176');
   const [isLoadingSession, setIsLoadingSession] = useState(true);
@@ -80,6 +94,8 @@ export default function App() {
           const parsed = JSON.parse(saved);
           if (parsed && parsed.role) {
             setUserRole(parsed.role);
+            const resolvedName = resolveDoctorName(parsed.branchPhone || '', parsed.userName);
+            setUserName(resolvedName);
             setBranchName(parsed.branchName || 'Nallagandla');
             setBranchPhone(parsed.branchPhone || '9553176176');
             if (parsed.role === 'admin') {
@@ -105,15 +121,18 @@ export default function App() {
   }, []);
 
   const handleLoginSuccess = async (data: LoginSuccessData) => {
+    const resolvedName = resolveDoctorName(data.branchPhone, data.userName);
     try {
       await AsyncStorage.setItem(MOBILE_AUTH_KEY, JSON.stringify({
         role: data.role,
+        userName: resolvedName,
         branchName: data.branchName,
         branchPhone: data.branchPhone,
       }));
     } catch (e) { }
 
     setUserRole(data.role);
+    setUserName(resolvedName);
     setBranchName(data.branchName);
     setBranchPhone(data.branchPhone);
     setTabHistory([]);
@@ -157,7 +176,15 @@ export default function App() {
     }
 
     if (userRole === 'doctor') {
-      return <DoctorScreen />;
+      const resolvedDocName = resolveDoctorName(branchPhone, userName);
+      const isEmployee = resolvedDocName.toLowerCase().includes('padma');
+      return (
+        <DoctorScreen
+          doctorCategory={isEmployee ? 'Employee Doctor' : 'Head Doctor'}
+          doctorName={resolvedDocName}
+          onLogout={handleSignOut}
+        />
+      );
     }
 
     if (userRole === 'staff') {
@@ -220,11 +247,10 @@ export default function App() {
     <SafeAreaView style={styles.container}>
       <StatusBar style="dark" />
 
-      {/* Top Header Bar */}
-      {!isAuthScreen && (
-        (activeTab === 'reception_dashboard' || activeTab === 'reception' || activeTab === 'admin') ? (
-          <View style={styles.topHeader}>
-            {/* Left Side: Hamburger Menu + Avatar Circle + Branch Info */}
+      {/* Top Header Bar - Rendered strictly for Dashboard only */}
+      {!isAuthScreen && userRole !== 'doctor' && (activeTab === 'reception_dashboard' || activeTab === 'reception' || activeTab === 'admin') && (
+        <View style={styles.topHeader}>
+            {/* Left Side: Hamburger Menu + Avatar Circle + Branch/User Info */}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
               <TouchableOpacity style={styles.menuDrawerBtn} onPress={() => setDrawerOpen(true)}>
                 <Ionicons name="menu-outline" size={24} color="#0f172a" />
@@ -243,9 +269,23 @@ export default function App() {
                     </View>
                   </View>
                 </View>
+              ) : userRole === 'doctor' ? (
+                <View>
+                  <Text style={styles.branchTitle}>{resolveDoctorName(branchPhone, userName)}</Text>
+                  <Text style={styles.phoneSub}>{branchPhone}</Text>
+                  <View style={styles.tagRow}>
+                    <View style={styles.roleBadge}>
+                      <Text style={styles.roleBadgeText}>DOCTOR</Text>
+                    </View>
+                    <View style={styles.locBadge}>
+                      <Ionicons name="location-outline" size={10} color="#64748b" style={{ marginRight: 2 }} />
+                      <Text style={styles.locBadgeText}>{branchName || 'Medical Center'}</Text>
+                    </View>
+                  </View>
+                </View>
               ) : (
                 <View>
-                  <Text style={styles.branchTitle}>{branchName}</Text>
+                  <Text style={styles.branchTitle}>{userName || branchName}</Text>
                   <Text style={styles.phoneSub}>{branchPhone}</Text>
                   <View style={styles.tagRow}>
                     <View style={styles.roleBadge}>
@@ -272,34 +312,6 @@ export default function App() {
               </TouchableOpacity>
             </View>
           </View>
-        ) : (
-          <View style={styles.subPageHeader}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <TouchableOpacity style={styles.headerBackBtn} onPress={handleGoBack}>
-                <Ionicons name="arrow-back" size={22} color="#0f172a" />
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.menuDrawerBtn} onPress={() => setDrawerOpen(true)}>
-                <Ionicons name="menu-outline" size={22} color="#475569" />
-              </TouchableOpacity>
-
-              <Text style={styles.subPageTitle}>
-                {activeTab === 'doctors' || activeTab === 'admin_doctors' ? 'Doctor Timings' :
-                 activeTab === 'staff' || activeTab === 'admin_staff' ? 'Staff Management' :
-                 activeTab === 'admin' ? 'Admin Portal' :
-                 activeTab === 'hr' ? 'HR Portal' :
-                 activeTab === 'reception_book' ? 'Book Appointment' :
-                 activeTab === 'reception_patients' ? 'Patients Directory' :
-                 activeTab === 'reception_medicines' ? 'Medicine Requests' :
-                 'SPH Staff Portal'}
-              </Text>
-            </View>
-
-            <TouchableOpacity style={styles.signOutBtnCircle} onPress={handleSignOut}>
-              <Ionicons name="log-out-outline" size={18} color="#ef4444" />
-            </TouchableOpacity>
-          </View>
-        )
       )}
 
       {/* Mobile Reception Side Drawer */}
@@ -319,7 +331,7 @@ export default function App() {
       </View>
 
       {/* Edge-to-Edge Full Width Bottom Navigation Bar */}
-      {!isAuthScreen && (
+      {!isAuthScreen && userRole !== 'doctor' && (
         <View style={styles.fullBottomNavContainer}>
           {bottomNavItems.map((item) => {
             const isActive = activeTab === item.id || (item.id === 'reception_dashboard' && activeTab === 'reception');

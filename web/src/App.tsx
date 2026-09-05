@@ -8,7 +8,7 @@ import { AuthPage, WebLoginSuccessData } from './pages/Auth/AuthPage';
 
 // Role Portals
 import { AdminDashboardPage } from './pages/Admin/AdminDashboardPage';
-import { DoctorDashboardPage } from './pages/Doctor/DoctorDashboardPage';
+import { DoctorLayout } from './pages/Doctor/DoctorLayout';
 
 // Reception Layout & Sub-Pages
 import { ReceptionLayout } from './pages/Reception/ReceptionLayout';
@@ -30,7 +30,7 @@ const AUTH_STORAGE_KEY = 'sph_auth_session';
 
 export default function App() {
   // Read persistent auth session on initial load
-  const [authSession, setAuthSession] = useState<{ role: string; branchName: string; branchPhone: string } | null>(() => {
+  const [authSession, setAuthSession] = useState<{ role: string; userName?: string; branchName: string; branchPhone: string } | null>(() => {
     try {
       const saved = localStorage.getItem(AUTH_STORAGE_KEY);
       if (saved) return JSON.parse(saved);
@@ -53,12 +53,14 @@ export default function App() {
     return 'auth';
   });
 
+  const [userName, setUserName] = useState(authSession?.userName || '');
   const [branchName, setBranchName] = useState(authSession?.branchName || 'KPHB Branch');
   const [branchPhone, setBranchPhone] = useState(authSession?.branchPhone || '+91 90301 76176');
 
   const handleLoginSuccess = (data: WebLoginSuccessData) => {
     const sessionData = {
       role: data.role,
+      userName: data.userName || '',
       branchName: data.branchName,
       branchPhone: data.branchPhone,
     };
@@ -67,6 +69,7 @@ export default function App() {
     } catch (e) { }
 
     setAuthSession(sessionData);
+    setUserName(data.userName || '');
     setBranchName(data.branchName);
     setBranchPhone(data.branchPhone);
 
@@ -117,7 +120,7 @@ export default function App() {
     switch (activeTab) {
       case 'reception':
       case 'reception_dashboard':
-        return <ReceptionDashboardPage />;
+        return <ReceptionDashboardPage currentBranch={branchName} onNavigate={setActiveTab} />;
       case 'reception_book':
         return <BookAppointmentPage currentBranch={branchName} />;
       case 'reception_patients':
@@ -135,7 +138,7 @@ export default function App() {
       case 'reception_cleaning':
         return <CleaningPhotosPage />;
       default:
-        return <ReceptionDashboardPage />;
+        return <ReceptionDashboardPage currentBranch={branchName} onNavigate={setActiveTab} />;
     }
   };
 
@@ -164,7 +167,14 @@ export default function App() {
     }
 
     if (userRole === 'doctor') {
-      return <DoctorDashboardPage />;
+      const isEmployee = (userName || '').toLowerCase().includes('padma');
+      return (
+        <DoctorLayout
+          doctorName={userName}
+          doctorCategory={isEmployee ? 'Employee Doctor' : 'Head Doctor'}
+          onLogout={handleLogout}
+        />
+      );
     }
 
     if (userRole === 'staff') {
@@ -208,6 +218,7 @@ export default function App() {
               setActiveTab(tab);
             }
           }}
+          userName={userName || authSession?.userName}
           branchName={branchName}
           branchPhone={branchPhone}
           role={authSession?.role}

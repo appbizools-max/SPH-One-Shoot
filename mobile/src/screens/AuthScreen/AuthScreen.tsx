@@ -7,6 +7,7 @@ import { auth, db, UserRole } from '@app/shared';
 
 export interface LoginSuccessData {
   role: UserRole;
+  userName?: string;
   branchName: string;
   branchPhone: string;
 }
@@ -35,7 +36,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
   const [otpCode, setOtpCode] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Helper to dynamically detect Role and Branch from input or Firestore
+  // Helper to dynamically detect Role, User Name, and Branch from input or Firestore
   const detectRoleAndBranch = async (input: string): Promise<LoginSuccessData> => {
     const cleanInput = input.trim();
     const digits = cleanInput.replace(/\D/g, '');
@@ -50,6 +51,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
           const data = docSnap.docs[0].data();
           return {
             role: 'doctor',
+            userName: data.name || 'Dr. Physician',
             branchName: data.branch || 'Medical Center',
             branchPhone: digits,
           };
@@ -61,6 +63,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
           const data = staffSnap.docs[0].data();
           return {
             role: 'staff',
+            userName: data.name || 'Staff Member',
             branchName: data.branch || 'KPHB Branch',
             branchPhone: digits,
           };
@@ -70,43 +73,57 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
       }
     }
 
-    // 2. Check Doctor Phone Numbers or Doctor Keywords
+    // 2. Exact Doctor Seed Matching by Phone or Name Keywords
+    if (digits.includes('8125260176') || lower.includes('prashanth')) {
+      return { role: 'doctor', userName: 'Dr. Prashanth K Vaidya', branchName: 'KPHB Branch', branchPhone: '+91 81252 60176' };
+    }
+    if (digits.includes('9903119766') || lower.includes('jobedah') || lower.includes('parveez')) {
+      return { role: 'doctor', userName: 'Dr. Jobedah Parveez', branchName: 'Nallagandla Branch', branchPhone: '+91 99031 19766' };
+    }
+    if (digits.includes('9490808582') || lower.includes('padma')) {
+      return { role: 'doctor', userName: 'Dr. Padma Priya', branchName: 'Chandanagar Branch', branchPhone: '+91 94908 08582' };
+    }
+    if (digits.includes('1111111111') || lower.includes('chanduri')) {
+      return { role: 'doctor', userName: 'Dr. Ramakrishna Chanduri', branchName: 'Dilshuknagar Branch', branchPhone: '+91 11111 11111' };
+    }
+    if (digits.includes('9804176176') || lower.includes('ramakrishna') || lower.includes('rama krishna')) {
+      return { role: 'doctor', userName: 'Dr. CH. Rama Krishna', branchName: 'Dilshuknagar Branch', branchPhone: '+91 98041 76176' };
+    }
+
     if (KNOWN_DOCTOR_PHONES.some(p => digits.includes(p)) || lower.includes('doctor') || lower.includes('dr.')) {
       return {
         role: 'doctor',
+        userName: 'Dr. Homeopathy Physician',
         branchName: 'Medical Center',
-        branchPhone: digits || '8125260176',
+        branchPhone: digits || '+91 81252 60176',
       };
     }
 
-    // 3. Check Admin / HR
+    // 3. Admin / HR
     if (lower.includes('admin') || digits === '9000000001') {
-      return { role: 'admin', branchName: 'HQ Admin Office', branchPhone: '9000000001' };
+      return { role: 'admin', userName: 'Admin Control Hub', branchName: 'HQ Admin Office', branchPhone: '+91 90000 00001' };
     }
     if (lower.includes('hr') || digits === '9000000002') {
-      return { role: 'hr', branchName: 'HQ HR Dept', branchPhone: '9000000002' };
+      return { role: 'hr', userName: 'HR Department', branchName: 'HQ HR Dept', branchPhone: '+91 90000 00002' };
     }
 
     // 4. Check Receptionist Branch Numbers
     if (digits.includes('9030176176') || digits.includes('90301') || lower.includes('kphb')) {
-      return { role: 'reception', branchName: 'KPHB', branchPhone: '9030176176' };
+      return { role: 'reception', userName: 'KPHB Reception', branchName: 'KPHB Branch', branchPhone: '+91 90301 76176' };
     }
     if (digits.includes('9132176176') || digits.includes('91321') || lower.includes('nalla')) {
-      return { role: 'reception', branchName: 'Nallagandla', branchPhone: '9132176176' };
-    }
-    if (digits.includes('9804176176') || digits.includes('98041') || lower.includes('dilshuk')) {
-      return { role: 'reception', branchName: 'Dilshuknagar', branchPhone: '9804176176' };
+      return { role: 'reception', userName: 'Nallagandla Reception', branchName: 'Nallagandla Branch', branchPhone: '+91 91321 76176' };
     }
     if (digits.includes('9553176176') || digits.includes('95531') || lower.includes('chanda')) {
-      return { role: 'reception', branchName: 'Chandanagar', branchPhone: '9553176176' };
+      return { role: 'reception', userName: 'Chandanagar Reception', branchName: 'Chandanagar Branch', branchPhone: '+91 95531 76176' };
     }
 
     // 5. Regular Staff fallback
     if (lower.includes('staff')) {
-      return { role: 'staff', branchName: 'KPHB Branch', branchPhone: digits || '9000000004' };
+      return { role: 'staff', userName: 'Staff Member', branchName: 'KPHB Branch', branchPhone: digits || '+91 90000 00004' };
     }
 
-    return { role: 'reception', branchName: 'KPHB', branchPhone: digits || '9030176176' };
+    return { role: 'reception', userName: 'KPHB Reception', branchName: 'KPHB Branch', branchPhone: digits || '+91 90301 76176' };
   };
 
   const handleSendOTP = async () => {
@@ -146,89 +163,13 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
     }
 
     setIsSubmitting(true);
-    const trimmedInput = email.trim();
-    const lowerInput = trimmedInput.toLowerCase();
-
-    let detectedRole: UserRole = 'reception';
-    if (lowerInput.includes('admin')) {
-      detectedRole = 'admin';
-    } else if (lowerInput.includes('hr')) {
-      detectedRole = 'hr';
-    } else if (lowerInput.includes('doctor') || lowerInput.includes('dr.')) {
-      detectedRole = 'doctor';
-    } else if (lowerInput.includes('staff')) {
-      detectedRole = 'staff';
-    }
-
-    if (detectedRole === 'admin' || detectedRole === 'hr' || detectedRole === 'doctor' || detectedRole === 'staff') {
-      if (auth) {
-        try {
-          const userCredential = await signInWithEmailAndPassword(auth, trimmedInput, password);
-          const user = userCredential.user;
-
-          let userRole: UserRole = detectedRole;
-          let branchName = detectedRole === 'admin' ? 'HQ Admin Office' : detectedRole === 'hr' ? 'HQ HR Dept' : 'Medical Center';
-          let branchPhone = detectedRole === 'admin' ? '9000000001' : detectedRole === 'hr' ? '9000000002' : '9000000003';
-
-          if (db) {
-            const collectionsToCheck = ['admins', 'hr', 'users', 'staff', 'doctors'];
-            for (const colName of collectionsToCheck) {
-              try {
-                const userDocSnap = await getDoc(doc(db, colName, user.uid));
-                if (userDocSnap.exists()) {
-                  const data = userDocSnap.data();
-                  if (data.role) userRole = data.role as UserRole;
-                  branchName = data.branchName || data.branch || branchName;
-                  branchPhone = data.branchPhone || data.phone || branchPhone;
-                  break;
-                }
-              } catch (err) { }
-            }
-          }
-
-          setIsSubmitting(false);
-
-          if (onLoginSuccess) {
-            onLoginSuccess({
-              role: userRole,
-              branchName: branchName,
-              branchPhone: branchPhone,
-            });
-          } else {
-            Alert.alert('Access Granted', `Welcome to ${userRole.toUpperCase()} Portal`);
-          }
-          return;
-        } catch (fbErr: any) {
-          console.warn('Firebase Auth note on mobile, signing in with role credentials:', fbErr);
-        }
-      }
-
-      setIsSubmitting(false);
-
-      if (onLoginSuccess) {
-        onLoginSuccess({
-          role: detectedRole,
-          branchName: detectedRole === 'admin' ? 'HQ Admin Office' : detectedRole === 'hr' ? 'HQ HR Dept' : 'Medical Center',
-          branchPhone: detectedRole === 'admin' ? '9000000001' : detectedRole === 'hr' ? '9000000002' : '9000000003',
-        });
-      } else {
-        Alert.alert('Access Granted', `Welcome to ${detectedRole.toUpperCase()} Portal`);
-      }
-      return;
-    }
-
-    // 2. Receptionist Branch Login fallback
-    const branch = getAuthorizedBranch(email) || AUTHORIZED_RECEPTION_BRANCHES['9030176176'];
+    const authData = await detectRoleAndBranch(email);
     setIsSubmitting(false);
 
     if (onLoginSuccess) {
-      onLoginSuccess({
-        role: 'reception',
-        branchName: branch.name,
-        branchPhone: branch.phone,
-      });
+      onLoginSuccess(authData);
     } else {
-      Alert.alert('Access Granted', `Signed in to ${branch.name} Branch Reception`);
+      Alert.alert('Access Granted', `Welcome to ${authData.role.toUpperCase()} Portal`);
     }
   };
 
@@ -253,14 +194,49 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
 
           {/* Page Headers */}
           <View style={styles.headerSection}>
-            <Text style={styles.portalTitle}>SPH Reception Desk</Text>
-            <Text style={styles.portalSubtitle}>Branch Receptionist Portal</Text>
+            <Text style={styles.portalTitle}>Spiritual Homeopathy</Text>
+            <Text style={styles.portalSubtitle}>Doctor, Staff, HR, Reception & Admin Portal</Text>
           </View>
 
           {/* White Card Box */}
           <View style={styles.whiteCard}>
+            {/* 2 Unified Login Tabs: Mobile OTP vs Email/Password */}
+            <View style={styles.tabBarContainer}>
+              <TouchableOpacity
+                style={[styles.tabButton, loginMethod === 'otp' && styles.tabButtonActive]}
+                onPress={() => setLoginMethod('otp')}
+              >
+                <Ionicons
+                  name="call-outline"
+                  size={16}
+                  color={loginMethod === 'otp' ? '#258ec8' : '#64748b'}
+                  style={{ marginRight: 6 }}
+                />
+                <Text style={[styles.tabButtonText, loginMethod === 'otp' && styles.tabButtonTextActive]}>
+                  Mobile OTP
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.tabButton, loginMethod === 'email' && styles.tabButtonActive]}
+                onPress={() => setLoginMethod('email')}
+              >
+                <Ionicons
+                  name="mail-outline"
+                  size={16}
+                  color={loginMethod === 'email' ? '#258ec8' : '#64748b'}
+                  style={{ marginRight: 6 }}
+                />
+                <Text style={[styles.tabButtonText, loginMethod === 'email' && styles.tabButtonTextActive]}>
+                  Email (Admin/HR)
+                </Text>
+              </TouchableOpacity>
+            </View>
+
             {loginMethod === 'otp' ? (
               <>
+                <Text style={styles.sectionSubtitle}>Doctor, Staff & Receptionist Login</Text>
+
                 {!otpSent ? (
                   <>
                     {/* Phone Input */}
@@ -268,7 +244,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
                       <Ionicons name="call-outline" size={18} color="#258ec8" style={{ marginRight: 8 }} />
                       <TextInput
                         style={styles.inputField}
-                        placeholder="Receptionist Mobile Number (e.g. 9030176176)"
+                        placeholder="Mobile Number (e.g. 8125260176, 9030176176)"
                         placeholderTextColor="#94a3b8"
                         keyboardType="phone-pad"
                         value={phoneNumber}
@@ -278,8 +254,12 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
                     </View>
 
                     {/* Send OTP Primary Button */}
-                    <TouchableOpacity style={styles.primaryButton} onPress={handleSendOTP}>
-                      <Text style={styles.primaryButtonText}>Send OTP</Text>
+                    <TouchableOpacity style={styles.primaryButton} onPress={handleSendOTP} disabled={isSubmitting}>
+                      {isSubmitting ? (
+                        <ActivityIndicator color="#ffffff" />
+                      ) : (
+                        <Text style={styles.primaryButtonText}>Send Verification OTP</Text>
+                      )}
                     </TouchableOpacity>
                   </>
                 ) : (
@@ -298,8 +278,12 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
                       />
                     </View>
 
-                    <TouchableOpacity style={styles.primaryButton} onPress={handleVerifyOTP}>
-                      <Text style={styles.primaryButtonText}>Verify & Reception Login</Text>
+                    <TouchableOpacity style={styles.primaryButton} onPress={handleVerifyOTP} disabled={isSubmitting}>
+                      {isSubmitting ? (
+                        <ActivityIndicator color="#ffffff" />
+                      ) : (
+                        <Text style={styles.primaryButtonText}>Verify & Sign In</Text>
+                      )}
                     </TouchableOpacity>
 
                     <TouchableOpacity onPress={() => setOtpSent(false)} style={{ marginTop: 12 }}>
@@ -307,23 +291,17 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
                     </TouchableOpacity>
                   </>
                 )}
-
-                {/* Email Sign In Option */}
-                <TouchableOpacity
-                  style={{ marginTop: 20, marginBottom: 20 }}
-                  onPress={() => setLoginMethod('email')}
-                >
-                  <Text style={styles.linkText}>Receptionist? Sign In with Email</Text>
-                </TouchableOpacity>
               </>
             ) : (
               <>
+                <Text style={styles.sectionSubtitle}>Admin & HR Management Login</Text>
+
                 {/* Email Fields */}
                 <View style={styles.inputContainer}>
                   <Ionicons name="mail-outline" size={18} color="#258ec8" style={{ marginRight: 8 }} />
                   <TextInput
                     style={styles.inputField}
-                    placeholder="Receptionist Email Address"
+                    placeholder="Email Address (e.g. admin@gmail.com)"
                     placeholderTextColor="#94a3b8"
                     keyboardType="email-address"
                     autoCapitalize="none"
@@ -344,26 +322,21 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
                   />
                 </View>
 
-                <TouchableOpacity style={styles.primaryButton} onPress={handleEmailLogin}>
-                  <Text style={styles.primaryButtonText}>Sign In to Reception</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={{ marginTop: 20, marginBottom: 20 }}
-                  onPress={() => setLoginMethod('otp')}
-                >
-                  <Text style={styles.linkText}>Sign In with Mobile OTP</Text>
+                <TouchableOpacity style={styles.primaryButton} onPress={handleEmailLogin} disabled={isSubmitting}>
+                  {isSubmitting ? (
+                    <ActivityIndicator color="#ffffff" />
+                  ) : (
+                    <Text style={styles.primaryButtonText}>Sign In to Portal</Text>
+                  )}
                 </TouchableOpacity>
               </>
             )}
 
-            {/* Strict Branch Info List */}
+            {/* Role Info Footer */}
             <View style={styles.branchListContainer}>
-              <Text style={styles.branchListHeading}>AUTHORIZED BRANCH NUMBERS:</Text>
-              <Text style={styles.branchItemText}>• KPHB: 9030 176 176</Text>
-              <Text style={styles.branchItemText}>• Nallagandla: 9132 176 176</Text>
-              <Text style={styles.branchItemText}>• Dilshuknagar: 9804 176 176</Text>
-              <Text style={styles.branchItemText}>• Chandanagar: 9553 176 176</Text>
+              <Text style={styles.branchListHeading}>LOGIN ACCOUNTS ACCESS:</Text>
+              <Text style={styles.branchItemText}>• Doctor, Staff & Reception: Mobile Number OTP</Text>
+              <Text style={styles.branchItemText}>• Admin & HR: Email & Password Sign In</Text>
             </View>
           </View>
         </ScrollView>
@@ -418,6 +391,45 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.06,
     shadowRadius: 20,
     elevation: 4,
+  },
+  tabBarContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#f1f5f9',
+    borderRadius: 12,
+    padding: 4,
+    marginBottom: 20,
+  },
+  tabButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  tabButtonActive: {
+    backgroundColor: '#ffffff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  tabButtonText: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+  tabButtonTextActive: {
+    color: '#258ec8',
+    fontWeight: '800',
+  },
+  sectionSubtitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#334155',
+    marginBottom: 14,
+    textAlign: 'center',
   },
   inputContainer: {
     flexDirection: 'row',

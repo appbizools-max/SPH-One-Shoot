@@ -51,18 +51,22 @@ export const TargetProgressUI: React.FC<TargetProgressUIProps> = ({
       {/* 3 Metric Columns: Target | Reached | Remaining */}
       <View style={styles.metricsRow}>
         <View style={styles.metricCol}>
-          <Text style={styles.metricLabel}>Target Goal</Text>
-          <Text style={styles.metricValue}>₹{targetNum.toLocaleString('en-IN')}</Text>
+          <Text style={styles.metricLabel} numberOfLines={1}>Target Goal</Text>
+          <Text style={styles.metricValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
+            ₹{targetNum.toLocaleString('en-IN')}
+          </Text>
         </View>
         <View style={styles.divider} />
         <View style={styles.metricCol}>
-          <Text style={styles.metricLabel}>Target Reached</Text>
-          <Text style={[styles.metricValue, { color: '#16a34a' }]}>₹{reachedNum.toLocaleString('en-IN')}</Text>
+          <Text style={styles.metricLabel} numberOfLines={1}>Target Reached</Text>
+          <Text style={[styles.metricValue, { color: '#16a34a' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
+            ₹{reachedNum.toLocaleString('en-IN')}
+          </Text>
         </View>
         <View style={styles.divider} />
         <View style={styles.metricCol}>
-          <Text style={styles.metricLabel}>Remaining</Text>
-          <Text style={[styles.metricValue, { color: remaining > 0 ? '#258ec8' : '#16a34a' }]}>
+          <Text style={styles.metricLabel} numberOfLines={1}>Remaining</Text>
+          <Text style={[styles.metricValue, { color: remaining > 0 ? '#258ec8' : '#16a34a' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
             ₹{remaining.toLocaleString('en-IN')}
           </Text>
         </View>
@@ -89,7 +93,7 @@ const styles = StyleSheet.create({
     width: '100%',
     borderRadius: 14,
     paddingHorizontal: 12,
-    paddingVertical: 12,
+    paddingVertical: 14,
     marginVertical: 4,
     borderWidth: 1,
     shadowColor: '#0f172a',
@@ -97,16 +101,19 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.04,
     shadowRadius: 6,
     elevation: 2,
+    overflow: 'hidden',
   },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    marginBottom: 12,
   },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
+    marginRight: 6,
   },
   cardTitle: {
     fontSize: 15,
@@ -147,28 +154,31 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#f8fafc',
-    borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 2,
-    marginBottom: 10,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+    marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#f1f5f9',
+    borderColor: '#e2e8f0',
+    width: '100%',
   },
   metricCol: {
     flex: 1,
     alignItems: 'center',
+    paddingHorizontal: 2,
   },
   divider: {
     width: 1,
-    height: 24,
-    backgroundColor: '#e2e8f0',
+    height: 26,
+    backgroundColor: '#cbd5e1',
   },
   metricLabel: {
     fontSize: 9.5,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#64748b',
     textTransform: 'uppercase',
-    marginBottom: 2,
+    letterSpacing: 0.3,
+    marginBottom: 3,
   },
   metricValue: {
     fontSize: 13.5,
@@ -176,15 +186,15 @@ const styles = StyleSheet.create({
     color: '#0f172a',
   },
   progressTrack: {
-    height: 8,
+    height: 10,
     backgroundColor: '#e2e8f0',
-    borderRadius: 4,
+    borderRadius: 5,
     overflow: 'hidden',
-    marginBottom: 6,
+    marginBottom: 8,
   },
   progressBar: {
     height: '100%',
-    borderRadius: 4,
+    borderRadius: 5,
   },
   footerRow: {
     flexDirection: 'row',
@@ -192,13 +202,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   footerText: {
-    fontSize: 11,
+    fontSize: 11.5,
     color: '#64748b',
-    fontWeight: '500',
+    fontWeight: '600',
     flex: 1,
   },
   percentageText: {
-    fontSize: 11.5,
+    fontSize: 12,
     fontWeight: '800',
     color: '#0f172a',
     marginLeft: 6,

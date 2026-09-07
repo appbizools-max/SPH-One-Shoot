@@ -1,23 +1,45 @@
 import React, { useState, useEffect } from 'react';
 import {
-  ClipboardList, Clock, CreditCard, Search, Calendar, UserPlus, CheckCircle,
-  ArrowRightLeft, UserX, UserCheck, Activity, CheckCircle2, Play, AlertCircle, Trash2,
-  ArrowUp, ArrowDown
+  ClipboardList, Clock, CreditCard, Search, Calendar, CheckCircle,
+  ArrowRightLeft, UserX, Activity, CheckCircle2, Play, AlertCircle, Trash2,
+  ArrowUp, ArrowDown, Phone, CalendarClock, X, Save, MoreVertical, MessageCircle
 } from 'lucide-react';
 import { db } from '@app/shared';
 import { collection, onSnapshot, updateDoc, deleteDoc, doc } from 'firebase/firestore';
 import { TargetProgressWebUI } from '../../../components/TargetProgressWebUI';
+
 interface ReceptionDashboardPageProps {
   currentBranch?: string;
   onNavigate?: (tab: string) => void;
 }
+
 export const ReceptionDashboardPage: React.FC<ReceptionDashboardPageProps> = ({ currentBranch, onNavigate }) => {
   const [appointments, setAppointments] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'upcoming' | 'active' | 'completed'>('upcoming');
   const [searchTerm, setSearchTerm] = useState('');
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
 
-  // Subscribe live to both Firestore appointments & allpatients collections
+  // 3-Dots Dropdown Menu State
+  const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
+
+  // Reschedule Modal States
+  const [rescheduleModalApp, setRescheduleModalApp] = useState<any | null>(null);
+  const [newRescheduleDate, setNewRescheduleDate] = useState<string>('');
+  const [newRescheduleTime, setNewRescheduleTime] = useState<string>('10:00 AM');
+
+  // Close dropdown menu when clicking outside
+  useEffect(() => {
+    const handleGlobalClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.action-menu-container')) {
+        setActiveMenuId(null);
+      }
+    };
+    window.addEventListener('click', handleGlobalClick);
+    return () => window.removeEventListener('click', handleGlobalClick);
+  }, []);
+
+  // Subscribe live to Firestore branchTargets
   const [branchTarget, setBranchTarget] = useState({
     monthlyTarget: 1200000,
     targetReached: 980000,
@@ -29,17 +51,24 @@ export const ReceptionDashboardPage: React.FC<ReceptionDashboardPageProps> = ({ 
       const colRef = collection(db, 'branchTargets');
       const unsubscribe = onSnapshot(colRef, (snapshot) => {
         if (!snapshot.empty) {
+          const liveMap: Record<string, any> = {};
           snapshot.forEach((docSnap) => {
-            const data = docSnap.data();
-            const bName = currentBranch || 'KPHB Branch';
-            if (docSnap.id === 'kphb' || data.branchName === bName || docSnap.id.toLowerCase().includes('kphb')) {
-              setBranchTarget({
-                monthlyTarget: Number(data.monthlyTarget) || 1200000,
-                targetReached: Number(data.targetReached) || 980000,
-                branchName: data.branchName || bName
-              });
+            liveMap[docSnap.id.toLowerCase()] = docSnap.data();
+            if (docSnap.data().branchName) {
+              liveMap[docSnap.data().branchName.toLowerCase()] = docSnap.data();
             }
           });
+
+          const activeBranchKey = (currentBranch || 'KPHB Branch').toLowerCase().replace(/ branch$/i, '').trim();
+          const targetData = liveMap[activeBranchKey] || liveMap[`${activeBranchKey} branch`] || liveMap['kphb'] || Object.values(liveMap)[0];
+
+          if (targetData) {
+            setBranchTarget({
+              monthlyTarget: Number(targetData.monthlyTarget) || 1200000,
+              targetReached: Number(targetData.targetReached) || 980000,
+              branchName: targetData.branchName || currentBranch || 'KPHB Branch'
+            });
+          }
         }
       });
       return () => unsubscribe();
@@ -48,6 +77,7 @@ export const ReceptionDashboardPage: React.FC<ReceptionDashboardPageProps> = ({ 
     }
   }, [currentBranch]);
 
+  // Subscribe live to both Firestore appointments & allpatients collections
   useEffect(() => {
     let unsubApp: (() => void) | null = null;
     let unsubPat: (() => void) | null = null;
@@ -64,8 +94,8 @@ export const ReceptionDashboardPage: React.FC<ReceptionDashboardPageProps> = ({ 
       });
       const list = Array.from(combinedMap.values());
       list.sort((a, b) => {
-        const dateA = a.appointmentDate || a.date || '';
-        const dateB = b.appointmentDate || b.date || '';
+        const dateA = String(a.appointmentDate || a.date || a.createdAt || '');
+        const dateB = String(b.appointmentDate || b.date || b.createdAt || '');
         return dateB.localeCompare(dateA);
       });
       setAppointments(list);
@@ -114,19 +144,53 @@ export const ReceptionDashboardPage: React.FC<ReceptionDashboardPageProps> = ({ 
   const handleUpdateStatus = async (appId: string, newStatus: string) => {
     setActionLoadingId(appId);
     try {
-      try {
-        await updateDoc(doc(db, 'appointments', appId), {
-          status: newStatus,
-          updatedAt: new Date().toISOString()
-        });
-      } catch (e) {
-        await updateDoc(doc(db, 'allpatients', appId), {
-          status: newStatus,
-          updatedAt: new Date().toISOString()
-        });
-      }
+      const payload = {
+        status: newStatus,
+        updatedAt: new Date().toISOString()
+      };
+      await updateDoc(doc(db, 'appointments', appId), payload).catch(() => { });
+      await updateDoc(doc(db, 'allpatients', appId), payload).catch(() => { });
     } catch (err) {
       console.error('Failed to update status:', err);
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  // Reschedule Appointment handler
+  const handleSaveReschedule = async () => {
+    if (!rescheduleModalApp || !newRescheduleDate) return;
+    setActionLoadingId(rescheduleModalApp.id);
+    try {
+      const payload = {
+        appointmentDate: newRescheduleDate,
+        appointmentTime: newRescheduleTime || rescheduleModalApp.appointmentTime || '10:00 AM',
+        updatedAt: new Date().toISOString()
+      };
+      await updateDoc(doc(db, 'appointments', rescheduleModalApp.id), payload).catch(() => { });
+      await updateDoc(doc(db, 'allpatients', rescheduleModalApp.id), payload).catch(() => { });
+      setRescheduleModalApp(null);
+    } catch (err) {
+      console.error('Error saving rescheduled appointment:', err);
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  // Toggle Payment Status (Paid / Pending)
+  const handleTogglePaymentStatus = async (appId: string, currentStatus: string) => {
+    const nextStatus = currentStatus === 'paid' ? 'pending' : 'paid';
+    setActionLoadingId(appId);
+    try {
+      const payload = {
+        paymentStatus: nextStatus,
+        paymentPending: nextStatus === 'pending',
+        updatedAt: new Date().toISOString()
+      };
+      await updateDoc(doc(db, 'appointments', appId), payload).catch(() => { });
+      await updateDoc(doc(db, 'allpatients', appId), payload).catch(() => { });
+    } catch (err) {
+      console.error('Failed to toggle payment status:', err);
     } finally {
       setActionLoadingId(null);
     }
@@ -141,10 +205,10 @@ export const ReceptionDashboardPage: React.FC<ReceptionDashboardPageProps> = ({ 
     try {
       try {
         await deleteDoc(doc(db, 'appointments', appId));
-      } catch (e) {}
+      } catch (e) { }
       try {
         await deleteDoc(doc(db, 'allpatients', appId));
-      } catch (e) {}
+      } catch (e) { }
     } catch (err) {
       console.error('Failed to delete appointment:', err);
     } finally {
@@ -224,7 +288,6 @@ export const ReceptionDashboardPage: React.FC<ReceptionDashboardPageProps> = ({ 
     try {
       const currentOrder = currentApp.queueOrder ?? (listIndex + 1);
       const targetOrder = targetApp.queueOrder ?? (targetIndex + 1);
-      // Swap queue orders in Firestore (appointments & allpatients)
       try {
         await updateDoc(doc(db, 'appointments', currentApp.id), { queueOrder: targetOrder, updatedAt: new Date().toISOString() });
       } catch (e) {
@@ -283,7 +346,7 @@ export const ReceptionDashboardPage: React.FC<ReceptionDashboardPageProps> = ({ 
   });
 
   return (
-    <div style={{ padding: '24px 20px', maxWidth: '1400px', margin: '0 auto' }}>
+    <div style={{ padding: '24px 20px', maxWidth: '1400px', margin: '0 auto', fontFamily: 'Inter, system-ui, sans-serif' }}>
       {/* Branch Monthly Target Card */}
       <TargetProgressWebUI
         branchName={branchTarget.branchName}
@@ -298,8 +361,8 @@ export const ReceptionDashboardPage: React.FC<ReceptionDashboardPageProps> = ({ 
             <ClipboardList color="#258ec8" size={24} />
           </div>
           <div>
-            <h1 style={{ fontSize: '18px !important', fontWeight: 800, color: '#1e293b', margin: 0 }}>
-              Reception Desk Dashboard
+            <h1 style={{ fontSize: '18px', fontWeight: 800, color: '#1e293b', margin: 0 }}>
+              Reception Desk Dashboard ({currentBranch || 'KPHB Branch'})
             </h1>
           </div>
         </div>
@@ -307,7 +370,7 @@ export const ReceptionDashboardPage: React.FC<ReceptionDashboardPageProps> = ({ 
         {/* Date Filter Picker */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#ffffff', border: '1.5px solid #258ec8', padding: '6px 14px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(37, 142, 200, 0.12)' }}>
           <Calendar size={16} color="#258ec8" />
-          <span style={{ fontSize: '12px !important', fontWeight: 800, color: '#1e293b' }}>Select Date:</span>
+          <span style={{ fontSize: '12px', fontWeight: 800, color: '#1e293b' }}>Select Date:</span>
           <input
             type="date"
             value={selectedDate}
@@ -315,7 +378,7 @@ export const ReceptionDashboardPage: React.FC<ReceptionDashboardPageProps> = ({ 
             style={{
               border: 'none',
               outline: 'none',
-              fontSize: '12px !important',
+              fontSize: '12px',
               fontWeight: 700,
               color: '#0f172a',
               cursor: 'pointer',
@@ -332,7 +395,7 @@ export const ReceptionDashboardPage: React.FC<ReceptionDashboardPageProps> = ({ 
                 border: 'none',
                 padding: '4px 10px',
                 borderRadius: '8px',
-                fontSize: '11px !important',
+                fontSize: '11px',
                 fontWeight: 800,
                 cursor: 'pointer'
               }}
@@ -347,65 +410,65 @@ export const ReceptionDashboardPage: React.FC<ReceptionDashboardPageProps> = ({ 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '14px', marginBottom: '24px' }}>
         <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '14px', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <span style={{ fontSize: '11.5px !important', fontWeight: 600, color: '#64748b' }}>Total Bookings</span>
+            <span style={{ fontSize: '11.5px', fontWeight: 600, color: '#64748b' }}>Total Bookings</span>
             <Calendar color="#258ec8" size={16} />
           </div>
-          <span style={{ fontSize: '20px !important', fontWeight: 800, color: '#258ec8' }}>{totalBookings}</span>
-          <p style={{ fontSize: '10.5px !important', color: '#94a3b8', marginTop: '4px', margin: 0 }}>Bookings Today</p>
+          <span style={{ fontSize: '20px', fontWeight: 800, color: '#258ec8' }}>{totalBookings}</span>
+          <p style={{ fontSize: '10.5px', color: '#94a3b8', marginTop: '4px', margin: 0 }}>Bookings Today</p>
         </div>
 
         <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '14px', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <span style={{ fontSize: '11.5px !important', fontWeight: 600, color: '#64748b' }}>Waiting</span>
+            <span style={{ fontSize: '11.5px', fontWeight: 600, color: '#64748b' }}>Waiting</span>
             <Clock color="#d97706" size={16} />
           </div>
-          <span style={{ fontSize: '20px !important', fontWeight: 800, color: '#d97706' }}>{waitingCount}</span>
-          <p style={{ fontSize: '10.5px !important', color: '#94a3b8', marginTop: '4px', margin: 0 }}>In Waiting Lounge</p>
+          <span style={{ fontSize: '20px', fontWeight: 800, color: '#d97706' }}>{waitingCount}</span>
+          <p style={{ fontSize: '10.5px', color: '#94a3b8', marginTop: '4px', margin: 0 }}>In Waiting Lounge</p>
         </div>
 
         <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '14px', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <span style={{ fontSize: '11.5px !important', fontWeight: 600, color: '#64748b' }}>Active Consultations</span>
+            <span style={{ fontSize: '11.5px', fontWeight: 600, color: '#64748b' }}>Active Consultations</span>
             <Activity color="#d97706" size={16} />
           </div>
-          <span style={{ fontSize: '20px !important', fontWeight: 800, color: '#d97706' }}>{activeConsultationCount}</span>
-          <p style={{ fontSize: '10.5px !important', color: '#94a3b8', marginTop: '4px', margin: 0 }}>With Doctor Now</p>
+          <span style={{ fontSize: '20px', fontWeight: 800, color: '#d97706' }}>{activeConsultationCount}</span>
+          <p style={{ fontSize: '10.5px', color: '#94a3b8', marginTop: '4px', margin: 0 }}>With Doctor Now</p>
         </div>
 
         <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '14px', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <span style={{ fontSize: '11.5px !important', fontWeight: 600, color: '#64748b' }}>Payment Pending</span>
+            <span style={{ fontSize: '11.5px', fontWeight: 600, color: '#64748b' }}>Payment Pending</span>
             <CreditCard color="#ef4444" size={16} />
           </div>
-          <span style={{ fontSize: '20px !important', fontWeight: 800, color: '#ef4444' }}>{paymentPendingCount}</span>
-          <p style={{ fontSize: '10.5px !important', color: '#94a3b8', marginTop: '4px', margin: 0 }}>Unpaid Invoices</p>
+          <span style={{ fontSize: '20px', fontWeight: 800, color: '#ef4444' }}>{paymentPendingCount}</span>
+          <p style={{ fontSize: '10.5px', color: '#94a3b8', marginTop: '4px', margin: 0 }}>Unpaid Invoices</p>
         </div>
 
         <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '14px', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <span style={{ fontSize: '11.5px !important', fontWeight: 600, color: '#64748b' }}>Completed</span>
+            <span style={{ fontSize: '11.5px', fontWeight: 600, color: '#64748b' }}>Completed</span>
             <CheckCircle color="#16a34a" size={16} />
           </div>
-          <span style={{ fontSize: '20px !important', fontWeight: 800, color: '#16a34a' }}>{completedCount}</span>
-          <p style={{ fontSize: '10.5px !important', color: '#94a3b8', marginTop: '4px', margin: 0 }}>Visits Concluded</p>
+          <span style={{ fontSize: '20px', fontWeight: 800, color: '#16a34a' }}>{completedCount}</span>
+          <p style={{ fontSize: '10.5px', color: '#94a3b8', marginTop: '4px', margin: 0 }}>Visits Concluded</p>
         </div>
 
         <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '14px', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <span style={{ fontSize: '11.5px !important', fontWeight: 600, color: '#64748b' }}>Follow-up Opted</span>
+            <span style={{ fontSize: '11.5px', fontWeight: 600, color: '#64748b' }}>Follow-up Opted</span>
             <ArrowRightLeft color="#258ec8" size={16} />
           </div>
-          <span style={{ fontSize: '20px !important', fontWeight: 800, color: '#258ec8' }}>{followupOptedCount}</span>
-          <p style={{ fontSize: '10.5px !important', color: '#94a3b8', marginTop: '4px', margin: 0 }}>Next Visit Booked</p>
+          <span style={{ fontSize: '20px', fontWeight: 800, color: '#258ec8' }}>{followupOptedCount}</span>
+          <p style={{ fontSize: '10.5px', color: '#94a3b8', marginTop: '4px', margin: 0 }}>Next Visit Booked</p>
         </div>
 
         <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '14px', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <span style={{ fontSize: '11.5px !important', fontWeight: 600, color: '#64748b' }}>Follow-up Not Opted</span>
+            <span style={{ fontSize: '11.5px', fontWeight: 600, color: '#64748b' }}>Follow-up Not Opted</span>
             <UserX color="#64748b" size={16} />
           </div>
-          <span style={{ fontSize: '20px !important', fontWeight: 800, color: '#64748b' }}>{followupNotOptedCount}</span>
-          <p style={{ fontSize: '10.5px !important', color: '#94a3b8', marginTop: '4px', margin: 0 }}>No Next Visit</p>
+          <span style={{ fontSize: '20px', fontWeight: 800, color: '#64748b' }}>{followupNotOptedCount}</span>
+          <p style={{ fontSize: '10.5px', color: '#94a3b8', marginTop: '4px', margin: 0 }}>No Next Visit</p>
         </div>
       </div>
 
@@ -425,7 +488,7 @@ export const ReceptionDashboardPage: React.FC<ReceptionDashboardPageProps> = ({ 
                 borderRadius: '12px',
                 border: activeTab === 'upcoming' ? '2px solid #258ec8' : '1px solid #cbd5e1',
                 fontWeight: 800,
-                fontSize: '13px !important',
+                fontSize: '13px',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
@@ -442,7 +505,7 @@ export const ReceptionDashboardPage: React.FC<ReceptionDashboardPageProps> = ({ 
                 color: activeTab === 'upcoming' ? '#ffffff' : '#0284c7',
                 padding: '2px 8px',
                 borderRadius: '10px',
-                fontSize: '11px !important',
+                fontSize: '11px',
                 fontWeight: 800
               }}>
                 {upcomingList.length}
@@ -458,7 +521,7 @@ export const ReceptionDashboardPage: React.FC<ReceptionDashboardPageProps> = ({ 
                 borderRadius: '12px',
                 border: activeTab === 'active' ? '2px solid #d97706' : '1px solid #cbd5e1',
                 fontWeight: 800,
-                fontSize: '13px !important',
+                fontSize: '13px',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
@@ -475,7 +538,7 @@ export const ReceptionDashboardPage: React.FC<ReceptionDashboardPageProps> = ({ 
                 color: activeTab === 'active' ? '#ffffff' : '#b45309',
                 padding: '2px 8px',
                 borderRadius: '10px',
-                fontSize: '11px !important',
+                fontSize: '11px',
                 fontWeight: 800
               }}>
                 {activeList.length}
@@ -491,7 +554,7 @@ export const ReceptionDashboardPage: React.FC<ReceptionDashboardPageProps> = ({ 
                 borderRadius: '12px',
                 border: activeTab === 'completed' ? '2px solid #16a34a' : '1px solid #cbd5e1',
                 fontWeight: 800,
-                fontSize: '13px !important',
+                fontSize: '13px',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
@@ -508,7 +571,7 @@ export const ReceptionDashboardPage: React.FC<ReceptionDashboardPageProps> = ({ 
                 color: activeTab === 'completed' ? '#ffffff' : '#15803d',
                 padding: '2px 8px',
                 borderRadius: '10px',
-                fontSize: '11px !important',
+                fontSize: '11px',
                 fontWeight: 800
               }}>
                 {completedList.length}
@@ -529,7 +592,7 @@ export const ReceptionDashboardPage: React.FC<ReceptionDashboardPageProps> = ({ 
                 padding: '8px 12px 8px 36px',
                 borderRadius: '8px',
                 border: '1px solid #cbd5e1',
-                fontSize: '12px !important',
+                fontSize: '12px',
                 outline: 'none'
               }}
             />
@@ -540,18 +603,19 @@ export const ReceptionDashboardPage: React.FC<ReceptionDashboardPageProps> = ({ 
         {currentTabAppointments.length === 0 ? (
           <div style={{ padding: '40px 20px', textAlign: 'center', color: '#64748b' }}>
             <AlertCircle size={32} color="#94a3b8" style={{ marginBottom: '8px' }} />
-            <p style={{ margin: 0, fontSize: '13px !important', fontWeight: 600 }}>
+            <p style={{ margin: 0, fontSize: '13px', fontWeight: 600 }}>
               No {activeTab === 'upcoming' ? 'upcoming appointments' : activeTab === 'active' ? 'active consultations' : 'completed appointments'} found.
             </p>
           </div>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px !important' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
             <thead>
               <tr style={{ borderBottom: '2px solid #f1f5f9', textAlign: 'left', color: '#64748b', fontSize: '11px', fontWeight: 800 }}>
                 <th style={{ padding: '12px 8px' }}>PATIENT DETAILS</th>
                 <th style={{ padding: '12px 8px' }}>DOCTOR & BRANCH</th>
                 <th style={{ padding: '12px 8px' }}>DATE & TIME</th>
                 <th style={{ padding: '12px 8px' }}>MODE / DISEASE</th>
+                {activeTab !== 'upcoming' && <th style={{ padding: '12px 8px' }}>PAYMENT</th>}
                 <th style={{ padding: '12px 8px' }}>STATUS</th>
                 <th style={{ padding: '12px 8px', textAlign: 'right' }}>ACTION</th>
               </tr>
@@ -573,29 +637,41 @@ export const ReceptionDashboardPage: React.FC<ReceptionDashboardPageProps> = ({ 
                   else if (branchStr.includes('NALLAGANDLA') || branchStr === 'NGL') shortcut = 'NGL';
                   else if (branchStr.includes('DILSHUKNAGAR') || branchStr === 'DIL') shortcut = 'DIL';
                   else shortcut = branchStr.replace(/[^A-Z]/g, '').substring(0, 3) || 'GEN';
-                  
+
                   cleanRegId = `SPH-${shortcut}-${String(index + 1).padStart(4, '0')}`;
                 }
+
+                const patientPhone = app.phoneNumber || app.phone || '';
+                const cleanPhoneNum = patientPhone.replace(/\D/g, '').slice(-10);
+                const isPaid = app.paymentStatus === 'paid';
+                const isMenuOpen = activeMenuId === app.id;
 
                 return (
                   <tr key={app.id} style={{ borderBottom: '1px solid #f8fafc' }}>
                     <td style={{ padding: '12px 8px' }}>
                       <div style={{ fontWeight: 800, color: '#0f172a' }}>{app.patientName || app.name || 'Unnamed Patient'}</div>
-                      <div style={{ fontSize: '11px !important', color: '#64748b', marginTop: '2px' }}>
-                        {activeTab === 'upcoming' ? (
-                          app.phoneNumber || app.phone || 'No phone'
+                      <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ color: '#258ec8', fontWeight: 800 }}>{cleanRegId}</span>
+                        {patientPhone ? (
+                          <a
+                            href={`tel:${patientPhone}`}
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', color: '#0284c7', textDecoration: 'none', fontWeight: 700 }}
+                            title="Call Patient"
+                          >
+                            <Phone size={12} /> +91 {patientPhone}
+                          </a>
                         ) : (
-                          <><span style={{ color: '#258ec8', fontWeight: 800 }}>{cleanRegId}</span> • {app.phoneNumber || app.phone || 'No phone'}</>
+                          <span>• No phone</span>
                         )}
                       </div>
                     </td>
                     <td style={{ padding: '12px 8px' }}>
                       <div style={{ fontWeight: 700, color: '#1e293b' }}>{app.doctorName || app.doctor || 'Unassigned'}</div>
-                      <div style={{ fontSize: '11px !important', color: '#64748b', marginTop: '2px' }}>{app.branch || 'Main Branch'}</div>
+                      <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>{app.branch || 'Main Branch'}</div>
                     </td>
                     <td style={{ padding: '12px 8px' }}>
                       <div style={{ fontWeight: 700, color: '#0284c7' }}>{app.appointmentTime || app.time || '10:00 AM'}</div>
-                      <div style={{ fontSize: '11px !important', color: '#64748b', marginTop: '2px' }}>{app.appointmentDate || 'Today'}</div>
+                      <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>{app.appointmentDate || 'Today'}</div>
                     </td>
                     <td style={{ padding: '12px 8px' }}>
                       <span style={{
@@ -603,7 +679,7 @@ export const ReceptionDashboardPage: React.FC<ReceptionDashboardPageProps> = ({ 
                         color: app.consultationMode === 'video' ? '#0284c7' : '#475569',
                         padding: '2px 8px',
                         borderRadius: '6px',
-                        fontSize: '11px !important',
+                        fontSize: '11px',
                         fontWeight: 700,
                         display: 'inline-block',
                         marginBottom: '2px'
@@ -611,17 +687,44 @@ export const ReceptionDashboardPage: React.FC<ReceptionDashboardPageProps> = ({ 
                         {app.consultationMode === 'video' ? '📹 Video' : '🏥 In-Person'}
                       </span>
                       {app.diseases && (
-                        <div style={{ fontSize: '11px !important', color: '#64748b' }}>{app.diseases}</div>
+                        <div style={{ fontSize: '11px', color: '#64748b' }}>{app.diseases}</div>
                       )}
                     </td>
+
+                    {/* Payment Status Toggle (Hidden in Upcoming Tab) */}
+                    {activeTab !== 'upcoming' && (
+                      <td style={{ padding: '12px 8px' }}>
+                        <button
+                          type="button"
+                          disabled={isLoading}
+                          onClick={() => handleTogglePaymentStatus(app.id, isPaid ? 'paid' : 'pending')}
+                          style={{
+                            background: isPaid ? '#dcfce7' : '#fef2f2',
+                            color: isPaid ? '#15803d' : '#ef4444',
+                            border: `1px solid ${isPaid ? '#bbf7d0' : '#fecaca'}`,
+                            borderRadius: '6px',
+                            padding: '3px 8px',
+                            fontSize: '10.5px',
+                            fontWeight: 800,
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                          }}
+                        >
+                          <CreditCard size={11} /> {isPaid ? 'Paid ✓' : 'Mark Paid'}
+                        </button>
+                      </td>
+                    )}
+
                     <td style={{ padding: '12px 8px' }}>
-                      {status === 'in-consultation' || status === 'active' ? (
-                        <span style={{ background: '#fef3c7', color: '#b45309', padding: '4px 10px', borderRadius: '12px', fontSize: '11px !important', fontWeight: 800 }}>
-                          ⚡ In Consultation
-                        </span>
-                      ) : status === 'completed' ? (
-                        <span style={{ background: '#dcfce7', color: '#15803d', padding: '4px 10px', borderRadius: '12px', fontSize: '11px !important', fontWeight: 800 }}>
+                      {status === 'completed' || status === 'done' || status === 'finished' || activeTab === 'completed' ? (
+                        <span style={{ background: '#dcfce7', color: '#15803d', padding: '4px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: 800 }}>
                           ✓ Completed
+                        </span>
+                      ) : status === 'in-consultation' || status === 'active' ? (
+                        <span style={{ background: '#fef3c7', color: '#b45309', padding: '4px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: 800 }}>
+                          ⚡ In Consultation
                         </span>
                       ) : (
                         <button
@@ -634,7 +737,7 @@ export const ReceptionDashboardPage: React.FC<ReceptionDashboardPageProps> = ({ 
                             border: 'none',
                             padding: '6px 12px',
                             borderRadius: '10px',
-                            fontSize: '11px !important',
+                            fontSize: '11px',
                             fontWeight: 800,
                             cursor: 'pointer',
                             display: 'inline-flex',
@@ -647,100 +750,233 @@ export const ReceptionDashboardPage: React.FC<ReceptionDashboardPageProps> = ({ 
                         </button>
                       )}
                     </td>
+
+                    {/* ACTION COLUMN WITH CLEAN DROPDOWN MENU */}
                     <td style={{ padding: '12px 8px', textAlign: 'right' }}>
-                      {/* Upcoming Queue Re-ordering Buttons */}
-                      {activeTab === 'upcoming' && (
-                        <div style={{ display: 'inline-flex', gap: '4px', alignItems: 'center', marginRight: '8px' }}>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                        {/* Upcoming Queue Re-ordering Buttons */}
+                        {activeTab === 'upcoming' && (
+                          <div style={{ display: 'inline-flex', gap: '4px', alignItems: 'center' }}>
+                            <button
+                              type="button"
+                              disabled={index === 0}
+                              onClick={() => handleShiftQueueOrder(app, 'up')}
+                              title="Move Up in Queue"
+                              style={{
+                                background: '#258ec8',
+                                border: '1px solid #1d709e',
+                                borderRadius: '6px',
+                                padding: '5px 7px',
+                                cursor: index === 0 ? 'not-allowed' : 'pointer',
+                                opacity: index === 0 ? 0.3 : 1,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center'
+                              }}
+                            >
+                              <ArrowUp size={14} color="#ffffff" />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={index === upcomingList.length - 1}
+                              onClick={() => handleShiftQueueOrder(app, 'down')}
+                              title="Move Down in Queue"
+                              style={{
+                                background: '#258ec8',
+                                border: '1px solid #1d709e',
+                                borderRadius: '6px',
+                                padding: '5px 7px',
+                                cursor: index === upcomingList.length - 1 ? 'not-allowed' : 'pointer',
+                                opacity: index === upcomingList.length - 1 ? 0.3 : 1,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center'
+                              }}
+                            >
+                              <ArrowDown size={14} color="#ffffff" />
+                            </button>
+                          </div>
+                        )}
+
+                        {activeTab === 'active' && (
                           <button
                             type="button"
-                            disabled={index === 0}
-                            onClick={() => handleShiftQueueOrder(app, 'up')}
-                            title="Move Up in Queue"
+                            disabled={isLoading}
+                            onClick={() => handleUpdateStatus(app.id, 'completed')}
                             style={{
-                              background: '#258ec8',
-                              border: '1px solid #1d709e',
-                              borderRadius: '6px',
-                              padding: '5px 7px',
-                              cursor: index === 0 ? 'not-allowed' : 'pointer',
-                              opacity: index === 0 ? 0.3 : 1,
+                              background: '#16a34a',
+                              color: '#ffffff',
+                              border: 'none',
+                              padding: '6px 12px',
+                              borderRadius: '8px',
+                              fontSize: '11px',
+                              fontWeight: 800,
+                              cursor: 'pointer',
                               display: 'inline-flex',
                               alignItems: 'center',
-                              justifyContent: 'center'
+                              gap: '4px',
+                              boxShadow: '0 2px 6px rgba(22, 163, 74, 0.2)'
                             }}
                           >
-                            <ArrowUp size={14} color="#ffffff" />
+                            <CheckCircle2 size={12} /> Complete Visit
                           </button>
+                        )}
+
+                        {activeTab === 'completed' && (
+                          <span style={{ fontSize: '11px', color: '#16a34a', fontWeight: 700, marginRight: '4px' }}>
+                            Finished
+                          </span>
+                        )}
+
+                        {/* 3-DOTS ACTION DROPDOWN MENU */}
+                        <div className="action-menu-container" style={{ position: 'relative', display: 'inline-block' }}>
                           <button
                             type="button"
-                            disabled={index === upcomingList.length - 1}
-                            onClick={() => handleShiftQueueOrder(app, 'down')}
-                            title="Move Down in Queue"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveMenuId(isMenuOpen ? null : app.id);
+                            }}
+                            title="More Actions"
                             style={{
-                              background: '#258ec8',
-                              border: '1px solid #1d709e',
+                              background: isMenuOpen ? '#e2e8f0' : '#f1f5f9',
+                              border: '1px solid #cbd5e1',
                               borderRadius: '6px',
-                              padding: '5px 7px',
-                              cursor: index === upcomingList.length - 1 ? 'not-allowed' : 'pointer',
-                              opacity: index === upcomingList.length - 1 ? 0.3 : 1,
+                              padding: '5px',
+                              cursor: 'pointer',
                               display: 'inline-flex',
                               alignItems: 'center',
-                              justifyContent: 'center'
+                              justifyContent: 'center',
+                              color: '#334155'
                             }}
                           >
-                            <ArrowDown size={14} color="#ffffff" />
+                            <MoreVertical size={16} />
                           </button>
+
+                          {/* Dropdown Popup */}
+                          {isMenuOpen && (
+                            <div style={{
+                              position: 'absolute',
+                              right: 0,
+                              top: '100%',
+                              marginTop: '4px',
+                              backgroundColor: '#ffffff',
+                              borderRadius: '10px',
+                              boxShadow: '0 10px 25px -5px rgba(15, 23, 42, 0.15)',
+                              border: '1px solid #e2e8f0',
+                              zIndex: 1000,
+                              minWidth: '160px',
+                              padding: '6px',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '2px',
+                              textAlign: 'left'
+                            }}>
+                              {/* 1. Call Option */}
+                              {cleanPhoneNum ? (
+                                <a
+                                  href={`tel:${cleanPhoneNum}`}
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    padding: '8px 10px',
+                                    borderRadius: '6px',
+                                    fontSize: '12px',
+                                    fontWeight: 700,
+                                    color: '#0284c7',
+                                    textDecoration: 'none',
+                                    backgroundColor: 'transparent'
+                                  }}
+                                >
+                                  <Phone size={14} color="#0284c7" /> Call Patient
+                                </a>
+                              ) : null}
+
+                              {/* 2. WhatsApp Option */}
+                              {cleanPhoneNum ? (
+                                <a
+                                  href={`https://wa.me/91${cleanPhoneNum}?text=${encodeURIComponent(`Hello ${app.patientName || app.name || 'Patient'}, this is regarding your appointment at Spiritual Homeopathy (${app.branch || 'KPHB'}).`)}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    padding: '8px 10px',
+                                    borderRadius: '6px',
+                                    fontSize: '12px',
+                                    fontWeight: 700,
+                                    color: '#16a34a',
+                                    textDecoration: 'none',
+                                    backgroundColor: 'transparent'
+                                  }}
+                                >
+                                  <MessageCircle size={14} color="#16a34a" /> WhatsApp Chat
+                                </a>
+                              ) : null}
+
+                              {/* 3. Reschedule Option (EXCLUDED IN COMPLETED TAB AS REQUESTED!) */}
+                              {activeTab !== 'completed' && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setActiveMenuId(null);
+                                    setRescheduleModalApp(app);
+                                    setNewRescheduleDate(app.appointmentDate || selectedDate);
+                                    setNewRescheduleTime(app.appointmentTime || '10:00 AM');
+                                  }}
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    padding: '8px 10px',
+                                    borderRadius: '6px',
+                                    fontSize: '12px',
+                                    fontWeight: 700,
+                                    color: '#334155',
+                                    border: 'none',
+                                    background: 'none',
+                                    cursor: 'pointer',
+                                    width: '100%'
+                                  }}
+                                >
+                                  <CalendarClock size={14} color="#258ec8" /> Reschedule
+                                </button>
+                              )}
+
+                              <div style={{ height: '1px', backgroundColor: '#f1f5f9', margin: '3px 0' }} />
+
+                              {/* 4. Delete Option */}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveMenuId(null);
+                                  handleDeleteAppointment(app.id, app.patientName || app.name);
+                                }}
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '8px',
+                                  padding: '8px 10px',
+                                  borderRadius: '6px',
+                                  fontSize: '12px',
+                                  fontWeight: 700,
+                                  color: '#ef4444',
+                                  border: 'none',
+                                  background: 'none',
+                                  cursor: 'pointer',
+                                  width: '100%'
+                                }}
+                              >
+                                <Trash2 size={14} color="#ef4444" /> Delete Appointment
+                              </button>
+                            </div>
+                          )}
                         </div>
-                      )}
 
-                      <button
-                        type="button"
-                        disabled={isLoading}
-                        onClick={() => handleDeleteAppointment(app.id, app.patientName || app.name)}
-                        title="Delete Appointment"
-                        style={{
-                          background: 'none',
-                          color: '#ef4444',
-                          border: 'none',
-                          padding: '4px',
-                          cursor: 'pointer',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          marginRight: '6px'
-                        }}
-                      >
-                        <Trash2 size={18} />
-                      </button>
-
-                      {activeTab === 'active' && (
-                        <button
-                          type="button"
-                          disabled={isLoading}
-                          onClick={() => handleUpdateStatus(app.id, 'completed')}
-                          style={{
-                            background: '#16a34a',
-                            color: '#ffffff',
-                            border: 'none',
-                            padding: '6px 12px',
-                            borderRadius: '8px',
-                            fontSize: '11px !important',
-                            fontWeight: 800,
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            boxShadow: '0 2px 6px rgba(22, 163, 74, 0.2)'
-                          }}
-                        >
-                          <CheckCircle2 size={12} /> Complete Visit
-                        </button>
-                      )}
-
-                      {activeTab === 'completed' && (
-                        <span style={{ fontSize: '11px !important', color: '#16a34a', fontWeight: 700 }}>
-                          Finished
-                        </span>
-                      )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -749,6 +985,146 @@ export const ReceptionDashboardPage: React.FC<ReceptionDashboardPageProps> = ({ 
           </table>
         )}
       </div>
+
+      {/* RESCHEDULE MODAL */}
+      {rescheduleModalApp && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.5)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          padding: '16px'
+        }}>
+          <div style={{
+            backgroundColor: '#ffffff',
+            borderRadius: '16px',
+            width: '100%',
+            maxWidth: '420px',
+            padding: '24px',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
+            border: '1px solid #e2e8f0'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <CalendarClock size={20} color="#258ec8" />
+                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: '#0f172a' }}>
+                  Reschedule Appointment
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRescheduleModalApp(null)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '10px', marginBottom: '16px', border: '1px solid #f1f5f9' }}>
+              <div style={{ fontSize: '13.5px', fontWeight: 800, color: '#0f172a' }}>
+                {rescheduleModalApp.patientName || rescheduleModalApp.name}
+              </div>
+              <div style={{ fontSize: '11.5px', color: '#64748b', marginTop: '2px' }}>
+                Doctor: {rescheduleModalApp.doctorName || rescheduleModalApp.doctor || 'Unassigned'} • Phone: +91 {rescheduleModalApp.phone || rescheduleModalApp.phoneNumber || 'N/A'}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '20px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                  New Appointment Date:
+                </label>
+                <input
+                  type="date"
+                  value={newRescheduleDate}
+                  onChange={(e) => setNewRescheduleDate(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                  New Time Slot:
+                </label>
+                <select
+                  value={newRescheduleTime}
+                  onChange={(e) => setNewRescheduleTime(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    outline: 'none',
+                    backgroundColor: '#ffffff',
+                    boxSizing: 'border-box'
+                  }}
+                >
+                  {['09:30 AM', '10:00 AM', '10:30 AM', '11:00 AM', '11:30 AM', '12:00 PM', '04:30 PM', '05:00 PM', '05:30 PM', '06:00 PM', '06:30 PM', '07:00 PM'].map((slot) => (
+                    <option key={slot} value={slot}>{slot}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                onClick={() => setRescheduleModalApp(null)}
+                style={{
+                  padding: '9px 16px',
+                  borderRadius: '8px',
+                  border: '1px solid #cbd5e1',
+                  background: '#ffffff',
+                  color: '#475569',
+                  fontWeight: 700,
+                  fontSize: '12px',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveReschedule}
+                style={{
+                  padding: '9px 16px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: '#258ec8',
+                  color: '#ffffff',
+                  fontWeight: 800,
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                <Save size={14} /> Save Reschedule
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

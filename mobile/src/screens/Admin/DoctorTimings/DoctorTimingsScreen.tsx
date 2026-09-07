@@ -632,21 +632,16 @@ export const DoctorTimingsScreen: React.FC = () => {
   if (!selectedDoctor) {
     return (
       <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
-        {/* Full Width Top Header Bar */}
-        <View style={styles.topHeaderBar}>
-          <View style={{ flex: 1, marginRight: 8 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <MaterialCommunityIcons name="stethoscope" size={22} color="#258ec8" />
-              <Text style={styles.title} numberOfLines={1}>Doctor Timings</Text>
-            </View>
-            <Text style={styles.subTitle} numberOfLines={2}>Select a doctor below to configure clinic timings & schedules.</Text>
-          </View>
-
+        {/* Action Button Row */}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, paddingHorizontal: 4 }}>
+          <Text style={{ fontSize: 13, fontWeight: '700', color: '#64748b' }}>
+            Select a doctor to configure weekly timings:
+          </Text>
           <TouchableOpacity
             style={styles.addDoctorTopBtn}
             onPress={handleAddDoctor}
           >
-            <Ionicons name="add-circle" size={16} color="#ffffff" style={{ marginRight: 4 }} />
+            <Ionicons name="add-circle" size={15} color="#ffffff" style={{ marginRight: 4 }} />
             <Text style={styles.addDoctorTopBtnText}>Add Doctor</Text>
           </TouchableOpacity>
         </View>

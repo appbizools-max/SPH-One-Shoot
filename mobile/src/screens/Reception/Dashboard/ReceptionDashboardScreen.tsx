@@ -56,16 +56,24 @@ export const ReceptionDashboardScreen: React.FC<ReceptionDashboardScreenProps> =
       const colRef = collection(db, 'branchTargets');
       const unsubscribe = onSnapshot(colRef, (snapshot) => {
         if (!snapshot.empty) {
+          const liveMap: Record<string, any> = {};
           snapshot.forEach((docSnap) => {
-            const data = docSnap.data();
-            if (docSnap.id === 'kphb' || data.branchName === 'KPHB Branch') {
-              setBranchTarget({
-                monthlyTarget: Number(data.monthlyTarget) || 1200000,
-                targetReached: Number(data.targetReached) || 980000,
-                branchName: data.branchName || 'KPHB Branch'
-              });
+            liveMap[docSnap.id.toLowerCase()] = docSnap.data();
+            if (docSnap.data().branchName) {
+              liveMap[docSnap.data().branchName.toLowerCase()] = docSnap.data();
             }
           });
+
+          const activeBranchKey = (branchTarget.branchName || 'KPHB Branch').toLowerCase().replace(/ branch$/i, '').trim();
+          const targetData = liveMap[activeBranchKey] || liveMap[`${activeBranchKey} branch`] || liveMap['kphb'] || Object.values(liveMap)[0];
+
+          if (targetData) {
+            setBranchTarget({
+              monthlyTarget: Number(targetData.monthlyTarget) || 1200000,
+              targetReached: Number(targetData.targetReached) || 980000,
+              branchName: targetData.branchName || 'KPHB Branch'
+            });
+          }
         }
       });
       return () => unsubscribe();
@@ -291,11 +299,11 @@ export const ReceptionDashboardScreen: React.FC<ReceptionDashboardScreenProps> =
       // Update in appointments collection
       try {
         await updateDoc(doc(db, 'appointments', docId), payload);
-      } catch (e) {}
+      } catch (e) { }
       // Update in allpatients collection
       try {
         await updateDoc(doc(db, 'allpatients', docId), payload);
-      } catch (e) {}
+      } catch (e) { }
       Alert.alert('Rescheduled', `Appointment for ${selectedRescheduleAppt.name} rescheduled to ${rescheduleDate} at ${rescheduleTime}.`);
       setRescheduleModalOpen(false);
     } catch (err) {
@@ -304,23 +312,67 @@ export const ReceptionDashboardScreen: React.FC<ReceptionDashboardScreenProps> =
     }
   };
 
-  // Subscribe to Firestore appointments in real time
+  // Subscribe to real-time Firestore appointments & allpatients in real time (Matching Web Reception Dashboard)
   useEffect(() => {
+    let unsubApp: (() => void) | null = null;
+    let unsubPat: (() => void) | null = null;
+    let appsFromAppointments: any[] = [];
+    let appsFromAllPatients: any[] = [];
+
+    const mergeAndSet = () => {
+      const combinedMap = new Map<string, any>();
+      appsFromAppointments.forEach(item => combinedMap.set(item.id, item));
+      appsFromAllPatients.forEach(item => {
+        if (!combinedMap.has(item.id)) {
+          combinedMap.set(item.id, item);
+        }
+      });
+      const list = Array.from(combinedMap.values());
+      list.sort((a, b) => {
+        const dateA = String(a.appointmentDate || a.date || a.createdAt || '');
+        const dateB = String(b.appointmentDate || b.date || b.createdAt || '');
+        return dateB.localeCompare(dateA);
+      });
+      setLiveAppointments(list);
+    };
+
     try {
-      const colRef = collection(db, 'appointments');
-      const unsubscribe = onSnapshot(colRef, (snapshot) => {
+      unsubApp = onSnapshot(collection(db, 'appointments'), (snapshot) => {
         const list: any[] = [];
         snapshot.forEach((snap) => {
-          list.push({ id: snap.id, ...snap.data() });
+          list.push({ id: snap.id, collectionName: 'appointments', ...snap.data() });
         });
-        setLiveAppointments(list);
+        appsFromAppointments = list;
+        mergeAndSet();
       }, (err) => {
         console.warn('Dashboard appointments listener error:', err);
       });
-      return () => unsubscribe();
     } catch (e) {
       console.warn('Dashboard subscribe notice:', e);
     }
+
+    try {
+      unsubPat = onSnapshot(collection(db, 'allpatients'), (snapshot) => {
+        const list: any[] = [];
+        snapshot.forEach((snap) => {
+          const data = snap.data();
+          if (data.appointmentDate || data.date || data.appointmentTime || data.doctor || data.status) {
+            list.push({ id: snap.id, collectionName: 'allpatients', ...data });
+          }
+        });
+        appsFromAllPatients = list;
+        mergeAndSet();
+      }, (err) => {
+        console.warn('Allpatients listener notice:', err);
+      });
+    } catch (e) {
+      console.warn('Allpatients subscribe notice:', e);
+    }
+
+    return () => {
+      if (unsubApp) unsubApp();
+      if (unsubPat) unsubPat();
+    };
   }, []);
 
   // Handler for deleting appointment
@@ -337,10 +389,10 @@ export const ReceptionDashboardScreen: React.FC<ReceptionDashboardScreenProps> =
             try {
               try {
                 await deleteDoc(doc(db, 'appointments', patientId));
-              } catch (e) {}
+              } catch (e) { }
               try {
                 await deleteDoc(doc(db, 'allpatients', patientId));
-              } catch (e) {}
+              } catch (e) { }
               Alert.alert('Deleted', 'Appointment deleted successfully.');
             } catch (err) {
               console.error('Error deleting appointment:', err);
@@ -355,19 +407,12 @@ export const ReceptionDashboardScreen: React.FC<ReceptionDashboardScreenProps> =
   // Handler for updating appointment status directly from card buttons
   const handleUpdateStatus = async (docId: string, newStatus: 'active' | 'completed' | 'upcoming') => {
     try {
-      try {
-        const appRef = doc(db, 'appointments', docId);
-        await updateDoc(appRef, {
-          status: newStatus,
-          updatedAt: new Date().toISOString(),
-        });
-      } catch (e) {
-        const patRef = doc(db, 'allpatients', docId);
-        await updateDoc(patRef, {
-          status: newStatus,
-          updatedAt: new Date().toISOString(),
-        });
-      }
+      const payload = {
+        status: newStatus,
+        updatedAt: new Date().toISOString(),
+      };
+      await updateDoc(doc(db, 'appointments', docId), payload).catch(() => { });
+      await updateDoc(doc(db, 'allpatients', docId), payload).catch(() => { });
       Alert.alert('Status Updated', `Patient appointment marked as ${newStatus}.`);
     } catch (err) {
       console.error('Error updating status:', err);
@@ -375,20 +420,74 @@ export const ReceptionDashboardScreen: React.FC<ReceptionDashboardScreenProps> =
     }
   };
 
-  // Filter appointments by selected date
+  // Helper flexible date matcher matching Web logic
+  const isMatchingDate = (app: any, targetDate: string) => {
+    const rawDate = app.appointmentDate || app.date || app.bookingDate || app.dateString || app.slotDate || app.createdAt;
+    if (!rawDate) return targetDate === getTodayDateStr();
+    const clean = String(rawDate).trim();
+    if (!clean) return targetDate === getTodayDateStr();
+
+    if (clean === targetDate || clean.startsWith(targetDate)) return true;
+
+    if (clean.includes('T')) {
+      const isoPart = clean.split('T')[0]; // YYYY-MM-DD
+      const partsISO = isoPart.split('-');
+      if (partsISO.length === 3) {
+        const [y, m, d] = partsISO;
+        const ddmmyyyy = `${d.padStart(2, '0')}-${m.padStart(2, '0')}-${y}`;
+        if (ddmmyyyy === targetDate) return true;
+      }
+    }
+
+    const parts = clean.split(/[-/]/);
+    if (parts.length === 3) {
+      let d = parts[0];
+      let m = parts[1];
+      let y = parts[2];
+      if (parts[0].length === 4) {
+        y = parts[0];
+        m = parts[1];
+        d = parts[2];
+      }
+      const ddmmyyyy = `${d.padStart(2, '0')}-${m.padStart(2, '0')}-${y}`;
+      return ddmmyyyy === targetDate;
+    }
+
+    return false;
+  };
+
+  const isMatchingBranch = (app: any) => {
+    const currentBranch = branchTarget.branchName || 'KPHB Branch';
+    if (!currentBranch || currentBranch === 'All Branches') return true;
+    const appBranch = app.branch || app.targetBranch || app.branchName;
+    if (!appBranch) return true;
+    const normAppBranch = String(appBranch).toLowerCase().replace(/\s*branch\s*/i, '').trim();
+    const normCurrentBranch = String(currentBranch).toLowerCase().replace(/\s*branch\s*/i, '').trim();
+    return normAppBranch.includes(normCurrentBranch) || normCurrentBranch.includes(normAppBranch);
+  };
+
+  // Filter appointments by selected date and branch (Matching Web)
   const filteredAppointments = liveAppointments.filter(app => {
-    if (!selectedDate) return true;
-    const appDate = app.appointmentDate || app.date || '';
-    return appDate === selectedDate;
+    return isMatchingDate(app, selectedDate) && isMatchingBranch(app);
   });
 
-  // Dynamic metrics
+  // Dynamic metrics (Matching Web reception dashboard metrics)
   const totalBookings = filteredAppointments.length;
-  const waiting = filteredAppointments.filter(app => app.status !== 'completed' && app.status !== 'done' && app.status !== 'active' && app.status !== 'in_consultation').length;
-  const payPending = filteredAppointments.filter(app => app.status === 'active' || app.status === 'in_consultation').length;
-  const completed = filteredAppointments.filter(app => app.status === 'completed' || app.status === 'done').length;
+  const waiting = filteredAppointments.filter(app => {
+    const st = (app.status || '').toLowerCase();
+    return st === 'waiting' || st === 'scheduled' || st === 'upcoming' || st === 'pending';
+  }).length;
+  const activeConsultationsCount = filteredAppointments.filter(app => {
+    const st = (app.status || '').toLowerCase();
+    return st === 'active' || st === 'in_consultation' || st === 'in-consultation';
+  }).length;
+  const payPending = filteredAppointments.filter(app => app.paymentStatus === 'pending' || app.paymentPending === true).length;
+  const completed = filteredAppointments.filter(app => {
+    const st = (app.status || '').toLowerCase();
+    return st === 'completed' || st === 'done' || st === 'finished';
+  }).length;
   const apptsCompleted = completed;
-  const followupOpted = filteredAppointments.filter(app => app.followup === true || app.followupOpted === true).length;
+  const followupOpted = filteredAppointments.filter(app => app.followup === true || app.followUpOpted === true).length;
   const followupNotOpted = Math.max(0, totalBookings - followupOpted);
 
   const getCleanRegId = (app: any, index: number) => {
@@ -579,8 +678,8 @@ export const ReceptionDashboardScreen: React.FC<ReceptionDashboardScreenProps> =
           <MaterialCommunityIcons name="whatsapp" size={19} color="#22c55e" />
         </TouchableOpacity>
         {patient.status === 'upcoming' && (
-          <TouchableOpacity 
-            style={styles.rescheduleIconBtn} 
+          <TouchableOpacity
+            style={styles.rescheduleIconBtn}
             onPress={() => handleOpenRescheduleModal(patient)}
           >
             <Feather name="calendar" size={18} color="#258ec8" />
@@ -595,7 +694,7 @@ export const ReceptionDashboardScreen: React.FC<ReceptionDashboardScreenProps> =
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
-      
+
       {/* Target Progress Card */}
       <View style={{ paddingHorizontal: 10, marginTop: 8 }}>
         <TargetProgressUI
@@ -616,7 +715,7 @@ export const ReceptionDashboardScreen: React.FC<ReceptionDashboardScreenProps> =
         </View>
 
         {/* Date Filter Button */}
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.todayFilterBtn}
           onPress={() => setDatePickerModalOpen(true)}
         >
@@ -695,8 +794,8 @@ export const ReceptionDashboardScreen: React.FC<ReceptionDashboardScreenProps> =
         <View style={styles.emptyCardContainer}>
           <Ionicons name="calendar-outline" size={28} color="#cbd5e1" style={{ marginBottom: 6 }} />
           <Text style={styles.emptyCardText}>No upcoming waiting appointments for {selectedDate}.</Text>
-          <TouchableOpacity 
-            style={styles.limeGreenBtn} 
+          <TouchableOpacity
+            style={styles.limeGreenBtn}
             onPress={() => onNavigate && onNavigate('reception_book')}
           >
             <Ionicons name="add-circle-outline" size={16} color="#ffffff" style={{ marginRight: 6 }} />
@@ -756,7 +855,7 @@ export const ReceptionDashboardScreen: React.FC<ReceptionDashboardScreenProps> =
           onPress={() => setDatePickerModalOpen(false)}
         >
           <View style={[styles.modalCard, { maxWidth: 360, padding: 18 }]} onStartShouldSetResponder={() => true}>
-            
+
             {/* Modal Title & Close */}
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
               <Text style={{ fontSize: 16, fontWeight: '800', color: '#0f172a' }}>
@@ -814,7 +913,7 @@ export const ReceptionDashboardScreen: React.FC<ReceptionDashboardScreenProps> =
               >
                 <Feather name="chevron-left" size={18} color="#258ec8" />
               </TouchableOpacity>
-              
+
               <Text style={{ fontSize: 14, fontWeight: '800', color: '#0f172a' }}>
                 {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][calendarMonth.getMonth()]} {calendarMonth.getFullYear()}
               </Text>
@@ -927,7 +1026,7 @@ export const ReceptionDashboardScreen: React.FC<ReceptionDashboardScreenProps> =
           onPress={() => setRescheduleModalOpen(false)}
         >
           <View style={[styles.modalCard, { maxHeight: '90%' }]} onStartShouldSetResponder={() => true}>
-            
+
             {/* Modal Header */}
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
               <View>
@@ -942,10 +1041,10 @@ export const ReceptionDashboardScreen: React.FC<ReceptionDashboardScreenProps> =
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 10 }}>
-              
+
               {/* 1. SELECT NEW DATE */}
               <Text style={styles.fieldLabel}>Select New Date</Text>
-              
+
               {/* Quick Date Shortcuts & Calendar Toggle */}
               <View style={{ flexDirection: 'row', gap: 6, marginBottom: 10 }}>
                 <TouchableOpacity
@@ -1068,7 +1167,7 @@ export const ReceptionDashboardScreen: React.FC<ReceptionDashboardScreenProps> =
               <Text style={[styles.fieldLabel, { marginTop: 14 }]}>
                 Select Doctor for {selectedRescheduleAppt?.branch || 'Branch'} ({getDayNameFromDateStr(rescheduleDate)})
               </Text>
-              
+
               <TouchableOpacity
                 style={styles.dropdownSelectorBox}
                 onPress={() => setDoctorDropdownOpen(!doctorDropdownOpen)}

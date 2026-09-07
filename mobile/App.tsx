@@ -262,11 +262,60 @@ export default function App() {
     );
   }
 
+  const getSubPageTitle = (tab: string) => {
+    switch (tab) {
+      case 'branches':
+      case 'admin_branches':
+        return 'Manage Branches & Targets';
+      case 'doctors':
+      case 'admin_doctors':
+        return 'Doctor Timings & Schedules';
+      case 'staff':
+      case 'admin_staff':
+        return 'Staff & Employee Directory';
+      case 'package_members':
+      case 'admin_packages':
+        return 'Package Members';
+      case 'banners':
+      case 'admin_banners':
+        return 'Promotional App Banners';
+      case 'patients':
+      case 'admin_patients':
+        return 'Global Patients Summary';
+      case 'medicine':
+      case 'admin_medicines':
+        return 'Edit Medicine Inventory';
+      case 'reception_medicines':
+        return 'Medicine & Patient Requests';
+      case 'hr':
+      case 'hr_attendance':
+      case 'hr_payroll':
+      case 'hr_roster':
+        return 'Staff Leaves & HR Portal';
+      case 'reception_book':
+        return 'Book Appointment';
+      case 'reception_patients':
+        return 'All Patients Directory';
+      case 'reception_followups':
+        return 'Follow-Ups';
+      case 'reception_billing':
+        return 'Product Billing';
+      case 'reception_noshow':
+        return 'Doctor No Show';
+      case 'reception_media':
+        return 'Media Manager';
+      case 'reception_cleaning':
+        return 'Cleaning Photos';
+      default:
+        return 'Spiritual Homeo';
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="dark" />
 
-      {/* Top Header Bar - Rendered strictly for Dashboard only */}
+      {/* Top Main Dashboard Header Bar */}
       {!isAuthScreen && userRole !== 'doctor' && (activeTab === 'reception_dashboard' || activeTab === 'reception' || activeTab === 'admin' || activeTab === 'analytics') && (
         <View style={styles.topHeader}>
             {/* Left Side: Hamburger Menu + Avatar Circle + Branch/User Info */}
@@ -331,6 +380,25 @@ export default function App() {
               </TouchableOpacity>
             </View>
           </View>
+      )}
+
+      {/* Sub-Page Professional Navigation Header with Back Arrow < and Page Title */}
+      {!isAuthScreen && userRole !== 'doctor' && (activeTab !== 'reception_dashboard' && activeTab !== 'reception' && activeTab !== 'admin' && activeTab !== 'analytics') && (
+        <View style={styles.subPageHeader}>
+          <TouchableOpacity style={styles.headerBackBtn} onPress={handleGoBack}>
+            <Ionicons name="arrow-back" size={22} color="#0f172a" />
+          </TouchableOpacity>
+
+          <View style={{ flex: 1, marginLeft: 10 }}>
+            <Text style={styles.subPageTitle} numberOfLines={1}>
+              {getSubPageTitle(activeTab)}
+            </Text>
+          </View>
+
+          <TouchableOpacity style={styles.menuDrawerBtn} onPress={() => setDrawerOpen(true)}>
+            <Ionicons name="menu-outline" size={24} color="#64748b" />
+          </TouchableOpacity>
+        </View>
       )}
 
       {/* Mobile Reception Side Drawer */}

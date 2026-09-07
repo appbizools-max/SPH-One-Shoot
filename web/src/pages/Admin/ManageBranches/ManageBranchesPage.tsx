@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, Edit3, Lock, Unlock, Calendar, CheckCircle2 } from 'lucide-react';
+import { Building2, Edit3, Lock, Unlock, Calendar, CheckCircle2, ArrowLeft } from 'lucide-react';
 import { doc, onSnapshot, setDoc, collection } from 'firebase/firestore';
 import { db } from '@app/shared';
 import { TargetProgressWebUI } from '../../../components/TargetProgressWebUI';
+
 const DEFAULT_BRANCHES = [
   { id: 'kphb', name: 'KPHB Branch', phone: '+91 90301 76176', monthlyTarget: 1200000, targetReached: 980000, nextMonthTarget: 0 },
   { id: 'nallagandla', name: 'Nallagandla Branch', phone: '+91 91321 76176', monthlyTarget: 1000000, targetReached: 840000, nextMonthTarget: 0 },
@@ -10,7 +11,11 @@ const DEFAULT_BRANCHES = [
   { id: 'chandanagar', name: 'Chandanagar Branch', phone: '+91 95531 76176', monthlyTarget: 900000, targetReached: 720000, nextMonthTarget: 0 },
 ];
 
-export const ManageBranchesPage: React.FC = () => {
+interface ManageBranchesPageProps {
+  onBack?: () => void;
+}
+
+export const ManageBranchesPage: React.FC<ManageBranchesPageProps> = ({ onBack }) => {
   const [branches, setBranches] = useState(DEFAULT_BRANCHES);
   const [editingBranch, setEditingBranch] = useState<any>(null);
   const [editingTargetType, setEditingTargetType] = useState<'current' | 'next'>('current');
@@ -118,6 +123,28 @@ export const ManageBranchesPage: React.FC = () => {
       {/* MONTH SELECTOR BAR & TARGET LOCK STATUS */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '16px', backgroundColor: '#ffffff', padding: '14px 20px', borderRadius: '14px', border: '1px solid #e2e8f0' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {onBack && (
+            <button
+              type="button"
+              onClick={onBack}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                background: '#f1f5f9',
+                border: '1px solid #cbd5e1',
+                borderRadius: '8px',
+                padding: '6px 12px',
+                fontWeight: 700,
+                fontSize: '0.82rem',
+                color: '#334155',
+                cursor: 'pointer',
+                marginRight: '6px'
+              }}
+            >
+              <ArrowLeft size={16} color="#0f172a" /> Back
+            </button>
+          )}
           <Building2 size={22} color="#258ec8" />
           <span style={{ fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>
             Branch Target Period: <strong style={{ color: '#258ec8' }}>{activeTabMonth === 'current' ? currentMonthName : nextMonthName}</strong>
@@ -195,7 +222,7 @@ export const ManageBranchesPage: React.FC = () => {
       )}
 
       {/* BRANCH TARGET CARDS GRID */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(540px, 1fr))', gap: '20px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 480px), 1fr))', gap: '20px', width: '100%', boxSizing: 'border-box' }}>
         {branches.map((b) => (
           <div
             key={b.id}
@@ -205,7 +232,10 @@ export const ManageBranchesPage: React.FC = () => {
               borderRadius: '16px',
               padding: '20px',
               boxShadow: '0 2px 8px rgba(15, 23, 42, 0.03)',
-              position: 'relative'
+              position: 'relative',
+              boxSizing: 'border-box',
+              width: '100%',
+              overflow: 'hidden'
             }}
           >
             {/* Top Accent Line */}

@@ -303,7 +303,7 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ currentTab }) => {
 
       {/* TAB 2: BRANCHES & TARGETS */}
       {activeTab === 'branches' && (
-        <ManageBranchesScreen />
+        <ManageBranchesScreen onBack={() => setActiveTab('analytics')} />
       )}
 
       {/* TAB 3: GLOBAL PATIENTS */}

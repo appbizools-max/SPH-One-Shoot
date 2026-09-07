@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Modal, TextInput, Alert } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { Feather, Ionicons } from '@expo/vector-icons';
 import { doc, onSnapshot, setDoc, collection } from 'firebase/firestore';
 import { db } from '@app/shared';
 import { TargetProgressUI } from '../../../components/TargetProgressUI';
@@ -12,7 +12,12 @@ const DEFAULT_BRANCH_TARGETS = [
   { id: 'chandanagar', name: 'Chandanagar Branch', phone: '+91 95531 76176', monthlyTarget: 900000, targetReached: 720000, nextMonthTarget: 0 },
 ];
 
-export const ManageBranchesScreen: React.FC = () => {
+interface ManageBranchesScreenProps {
+  onBack?: () => void;
+  onNavigate?: (tab: string) => void;
+}
+
+export const ManageBranchesScreen: React.FC<ManageBranchesScreenProps> = ({ onBack }) => {
   const [branches, setBranches] = useState(DEFAULT_BRANCH_TARGETS);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [selectedBranch, setSelectedBranch] = useState<any>(null);
@@ -122,11 +127,9 @@ export const ManageBranchesScreen: React.FC = () => {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
-      <Text style={styles.title}>Manage Branches & Targets</Text>
-      <Text style={styles.subTitle}>Set monthly revenue goals and configure next month's target 2 days before month end.</Text>
+    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 80 }} showsVerticalScrollIndicator={false}>
 
-      {/* Month Switcher Tabs */}
+      {/* Month Switcher Tabs - Full Width */}
       <View style={styles.monthTabContainer}>
         <TouchableOpacity
           style={[styles.monthTabBtn, activeMonthTab === 'current' && styles.monthTabActive]}
@@ -149,7 +152,7 @@ export const ManageBranchesScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
 
-      {/* Lock Info Banner */}
+      {/* Lock Info Banner - Full Width */}
       {!isNextMonthUnlocked && activeMonthTab === 'next' && (
         <View style={styles.lockBanner}>
           <Feather name="lock" size={15} color="#64748b" style={{ marginRight: 8 }} />
@@ -159,6 +162,7 @@ export const ManageBranchesScreen: React.FC = () => {
         </View>
       )}
 
+      {/* Branch Cards List - Edge to Edge Width */}
       {branches.map((b) => (
         <View key={b.id} style={styles.branchWrapper}>
           <View style={styles.branchHeaderRow}>
@@ -177,7 +181,7 @@ export const ManageBranchesScreen: React.FC = () => {
               <Feather
                 name={activeMonthTab === 'next' && !isNextMonthUnlocked ? 'lock' : 'edit-3'}
                 size={14}
-                color={activeMonthTab === 'next' && !isNextMonthUnlocked ? '#94a3b8' : (activeMonthTab === 'next' ? '#ffffff' : '#258ec8')}
+                color={activeMonthTab === 'next' && !isNextMonthUnlocked ? '#94a3b8' : (activeMonthTab === 'next' ? '#ffffff' : '#ffffff')}
               />
               <Text style={[
                 styles.editBtnText,
@@ -258,15 +262,35 @@ export const ManageBranchesScreen: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8fafc', padding: 16 },
-  title: { fontSize: 18, fontWeight: '800', color: '#0f172a' },
-  subTitle: { fontSize: 12, color: '#64748b', marginBottom: 12 },
+  container: { flex: 1, backgroundColor: '#f8fafc', paddingHorizontal: 6, paddingTop: 6 },
+  topHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+    gap: 8,
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  backBtn: {
+    padding: 6,
+    borderRadius: 8,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  title: { fontSize: 16, fontWeight: '800', color: '#0f172a' },
+  subTitle: { fontSize: 11.5, color: '#64748b', marginTop: 1 },
   monthTabContainer: {
+    width: '100%',
     flexDirection: 'row',
     backgroundColor: '#ffffff',
     borderRadius: 12,
     padding: 4,
-    marginBottom: 12,
+    marginBottom: 10,
     gap: 6,
     borderWidth: 1,
     borderColor: '#e2e8f0',
@@ -293,56 +317,61 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   lockBanner: {
+    width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#ffffff',
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    padding: 12,
+    padding: 10,
     borderRadius: 12,
-    marginBottom: 14,
+    marginBottom: 10,
   },
   lockBannerText: {
-    fontSize: 12,
+    fontSize: 11.5,
     color: '#475569',
     flex: 1,
   },
   branchWrapper: {
+    width: '100%',
     backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 14,
+    borderRadius: 14,
+    padding: 10,
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    marginBottom: 16,
+    marginBottom: 10,
   },
   branchHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
+    paddingHorizontal: 4,
+    paddingTop: 2,
   },
-  branchName: { fontSize: 16, fontWeight: '800', color: '#0f172a' },
-  branchPhone: { fontSize: 12, color: '#64748b', marginTop: 2 },
+  branchName: { fontSize: 15, fontWeight: '800', color: '#0f172a' },
+  branchPhone: { fontSize: 11.5, color: '#64748b', marginTop: 1 },
   editBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     backgroundColor: '#258ec8',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderRadius: 8,
   },
-  editBtnText: { fontSize: 12, fontWeight: '700', color: '#ffffff' },
+  editBtnText: { fontSize: 11.5, fontWeight: '700', color: '#ffffff' },
   nextMonthBox: {
+    width: '100%',
     backgroundColor: '#f8fafc',
     borderWidth: 1,
     borderColor: '#e2e8f0',
     borderRadius: 12,
-    padding: 12,
-    marginTop: 6,
+    padding: 10,
+    marginTop: 4,
   },
   nextBoxTitle: {
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: '800',
     color: '#0f172a',
   },
@@ -353,7 +382,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   lockBadgeMiniText: {
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: '700',
     color: '#64748b',
   },
@@ -369,12 +398,12 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   nextBoxValLabel: {
-    fontSize: 11.5,
+    fontSize: 11,
     color: '#64748b',
     fontWeight: '600',
   },
   nextBoxValText: {
-    fontSize: 15,
+    fontSize: 14.5,
     fontWeight: '800',
     color: '#0f172a',
   },
@@ -382,32 +411,32 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.5)',
     justifyContent: 'center',
-    padding: 20,
+    padding: 16,
   },
   modalContent: {
     backgroundColor: '#ffffff',
     borderRadius: 16,
-    padding: 20,
+    padding: 18,
     borderWidth: 1,
     borderColor: '#e2e8f0',
   },
-  modalTitle: { fontSize: 17, fontWeight: '800', color: '#0f172a' },
-  modalSub: { fontSize: 13, color: '#64748b', marginBottom: 16 },
-  inputLabel: { fontSize: 12, fontWeight: '700', color: '#334155', marginBottom: 6 },
+  modalTitle: { fontSize: 16, fontWeight: '800', color: '#0f172a' },
+  modalSub: { fontSize: 12, color: '#64748b', marginBottom: 14 },
+  inputLabel: { fontSize: 11.5, fontWeight: '700', color: '#334155', marginBottom: 6 },
   textInput: {
     borderWidth: 1,
     borderColor: '#cbd5e1',
     borderRadius: 10,
     paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 15,
+    paddingVertical: 9,
+    fontSize: 14,
     fontWeight: '700',
     color: '#0f172a',
-    marginBottom: 18,
+    marginBottom: 16,
   },
-  modalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10 },
-  cancelBtn: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 8, backgroundColor: '#f1f5f9' },
-  cancelBtnText: { fontSize: 13, fontWeight: '700', color: '#64748b' },
-  saveBtn: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8, backgroundColor: '#258ec8' },
-  saveBtnText: { fontSize: 13, fontWeight: '700', color: '#ffffff' },
+  modalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8 },
+  cancelBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, backgroundColor: '#f1f5f9' },
+  cancelBtnText: { fontSize: 12.5, fontWeight: '700', color: '#64748b' },
+  saveBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, backgroundColor: '#258ec8' },
+  saveBtnText: { fontSize: 12.5, fontWeight: '700', color: '#ffffff' },
 });

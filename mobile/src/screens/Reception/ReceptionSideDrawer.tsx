@@ -192,7 +192,7 @@ const styles = StyleSheet.create({
   brandSub: {
     fontSize: 9.5,
     fontWeight: '800',
-    color: '#a8ce3a',
+    color: '#258ec8',
     letterSpacing: 0.6,
   },
   closeBtn: {

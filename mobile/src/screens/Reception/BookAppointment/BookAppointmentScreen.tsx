@@ -3,8 +3,16 @@ import { StyleSheet, Text, View, ScrollView, TextInput, TouchableOpacity, Modal,
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createDocument, db } from '@app/shared';
-import { collection, onSnapshot, addDoc, deleteDoc, doc, query, where, limit } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, deleteDoc, doc, query, where, limit, getDocs } from 'firebase/firestore';
+import { generateRegistrationId, getBranchShortcut } from '../../../utils/idGenerator';
+
+const COLORS = {
+  primary: '#0284c7',
+  secondary: '#0284c7',
+  text: '#0f172a'
+};
 let GLOBAL_MOBILE_PATIENTS_CACHE: any[] = [];
+let GLOBAL_MOBILE_ALLPATIENTS_CACHE: any[] = [];
 let GLOBAL_MOBILE_APPTS_CACHE: any[] = [];
 const STORAGE_PATIENTS_KEY = '@sph_patients_cache_v2';
 const STORAGE_APPTS_KEY = '@sph_appts_cache_v2';
@@ -46,7 +54,7 @@ interface Doctor {
   branchSchedules?: BranchSchedule[];
 }
 
-const DEFAULT_DOCTORS_SEED: Doctor[] = [
+export const DEFAULT_DOCTORS_SEED: Doctor[] = [
   {
     id: 'doc-1',
     name: 'Dr. Prashanth K Vaidya',
@@ -221,8 +229,158 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
   const [marketingSource, setMarketingSource] = useState('Select Source');
   const [consultationMode, setConsultationMode] = useState<'In-Clinic' | 'Online'>('In-Clinic');
 
+  // START STATE FOR PROFILE LOOKUP
+  const [patientData, setPatientData] = useState({ phone: '', fullName: '', patientName: '', patientId: '', regID: '', source: '' });
+  const [existingProfilesList, setExistingProfilesList] = useState<any[]>([]);
+  const [checkedPhone, setCheckedPhone] = useState('');
+  const [bypassPhoneCheck, setBypassPhoneCheck] = useState(false);
+  const [phoneCheckResult, setPhoneCheckResult] = useState<any>(null);
+  const [checkingProfilesLoading, setCheckingProfilesLoading] = useState(false);
+  const [existingProfilesModalVisible, setExistingProfilesModalVisible] = useState(false);
+  // END STATE
+
+  // START PROFILE FETCH BY PHONE
+  const findProfilesByPhone = async (rawPhone: string) => {
+    if (!rawPhone) return [];
+    const clean = String(rawPhone).replace(/\D/g, '').slice(-10);
+    if (clean.length < 10) return [];
+
+    const profilesMap = new Map();
+
+    const processDoc = (data: any, docId: string) => {
+      if (!data) return;
+      const pName = data.fullName || data.patientName || data.name || data.patient_name;
+      const docPhone = data.phone || data.patientPhone || data.phoneNumber || data.mobile || data.contact || data.contactNumber || '';
+      const cleanDocPhone = String(docPhone).replace(/\D/g, '').slice(-10);
+      if (pName && cleanDocPhone === clean) {
+        const rawReg = data.registrationId || data.registration_id || data.regId || data.regID || data.patientId || data.uhid;
+        let regId = '';
+        if (rawReg && typeof rawReg === 'string' && rawReg.trim().length > 0 && rawReg.trim().length <= 18 && !/^[a-zA-Z0-9]{19,32}$/.test(rawReg.trim())) {
+          regId = rawReg.trim().toUpperCase();
+        } else {
+          const shortcut = getBranchShortcut(data.branchName || data.branch || currentBranch);
+          regId = `SPH-${shortcut}-${String(profilesMap.size + 1).padStart(4, '0')}`;
+        }
+
+        const key = `${pName.toLowerCase()}_${cleanDocPhone}_${regId.toLowerCase()}`;
+        if (!profilesMap.has(key)) {
+          profilesMap.set(key, {
+            id: docId,
+            fullName: pName,
+            registrationId: regId,
+            phone: docPhone || clean,
+            gender: data.gender || '',
+            age: data.age || '',
+            source: data.source || 'Old Patient',
+            branchName: data.branchName || data.branch || ''
+          });
+        }
+      }
+    };
+
+    // 1. Search in-memory state & cache instantly (0ms)
+    try {
+      (allPatientsList || []).forEach(p => processDoc(p, p?.id));
+      (patientsList || []).forEach(p => processDoc(p, p?.id));
+      (existingAppointments || []).forEach(a => processDoc(a, a?.id));
+      (GLOBAL_MOBILE_ALLPATIENTS_CACHE || []).forEach(p => processDoc(p, p?.id));
+      (GLOBAL_MOBILE_PATIENTS_CACHE || []).forEach(p => processDoc(p, p?.id));
+    } catch (e) { }
+
+    // 2. Query Firestore collections with a 1.5s max timeout safety
+    const safeQuery = (q: any) => Promise.race([
+      getDocs(q).catch(() => ({ docs: [] })),
+      new Promise(res => setTimeout(() => res({ docs: [] }), 1500))
+    ]);
+
+    try {
+      const [snapAll, snapPatients, snapAppts, snapProfiles] = await Promise.all([
+        safeQuery(query(collection(db, 'allpatients'), where('phone', '==', clean), limit(20))),
+        safeQuery(query(collection(db, 'patients'), where('phone', '==', clean), limit(20))),
+        safeQuery(query(collection(db, 'appointments'), where('phone', '==', clean), limit(20))),
+        safeQuery(query(collection(db, 'patient_profiles'), where('phone', '==', clean), limit(20)))
+      ]);
+
+      [snapAll, snapPatients, snapAppts, snapProfiles].forEach((snap: any) => {
+        if (!snap || snap.empty || !snap.forEach) return;
+        snap.forEach((docSnap: any) => {
+          processDoc(docSnap.data(), docSnap.id);
+        });
+      });
+    } catch (err) {
+      console.warn("Firestore phone query error:", err);
+    }
+
+    const resultList = Array.from(profilesMap.values());
+    setPhoneCheckResult(resultList);
+    return resultList;
+  };
+  // END PROFILE FETCH BY PHONE
+
+  // START PHONE HANDLERS AND PROFILE SELECTION
+  const handleManualPhoneCheck = async (phoneVal: string) => {
+    const clean = phoneVal.replace(/\D/g, '').slice(-10);
+    if (clean.length < 10) {
+      Alert.alert("Invalid Phone", "Please enter a 10-digit mobile number.");
+      return;
+    }
+    setCheckingProfilesLoading(true);
+    try {
+      const list = await findProfilesByPhone(phoneVal);
+      if (list.length > 0) {
+        setExistingProfilesList(list);
+        setCheckedPhone(clean);
+        setExistingProfilesModalVisible(true);
+      } else {
+        Alert.alert("No Profiles Found", `No existing patient profiles found for +91 ${clean}.`);
+      }
+    } catch (err) {
+      console.error("Manual check error:", err);
+    } finally {
+      setCheckingProfilesLoading(false);
+    }
+  };
+
+  // Automatically triggers profile check when user enters 10 digits
+  const handlePhoneInputChange = (text: string) => {
+    setPhoneNumber(text);
+    setPatientData(prev => ({ ...prev, phone: text }));
+    setBypassPhoneCheck(false);
+
+    const clean = text.replace(/\D/g, '').slice(-10);
+    if (clean.length === 10) {
+      handleManualPhoneCheck(text);
+    }
+  };
+
+  // Populate appointment form when user selects an existing profile
+  const handleSelectExistingProfile = (prof: any) => {
+    setPatientName(prof.fullName);
+    setPhoneNumber(prof.phone || (patientData.phone || phoneNumber));
+    setMarketingSource('Old Patient');
+    setPatientData(prev => ({
+      ...prev,
+      patientId: prof.id,
+      fullName: prof.fullName,
+      patientName: prof.fullName,
+      regID: prof.registrationId || prev.regID,
+      source: 'Old Patient'
+    }));
+    setBypassPhoneCheck(true);
+    setExistingProfilesModalVisible(false);
+  };
+  // END HANDLERS
+
   // Section 2: Appointment Information
-  const [appointmentDate, setAppointmentDate] = useState('01-09-2026');
+  const getTodayFormatted = () => {
+    const today = new Date();
+    const d = String(today.getDate()).padStart(2, '0');
+    const m = String(today.getMonth() + 1).padStart(2, '0');
+    const y = today.getFullYear();
+    return `${d}-${m}-${y}`;
+  };
+
+  const [appointmentDate, setAppointmentDate] = useState(getTodayFormatted);
   const [selectedDoctor, setSelectedDoctor] = useState('');
   const [selectedTimeSlot, setSelectedTimeSlot] = useState('');
 
@@ -359,14 +517,16 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
     return () => backSubscription.remove();
   }, [onBack, onNavigate]);
 
-  // Firestore Live Patient History Collections (appointments & patients) with 0ms Instant Device Cache
+  // Firestore Live Patient History Collections (appointments, patients & allpatients) with 0ms Instant Device Cache
   const [existingAppointments, setExistingAppointments] = useState<any[]>(GLOBAL_MOBILE_APPTS_CACHE);
   const [patientsList, setPatientsList] = useState<any[]>(GLOBAL_MOBILE_PATIENTS_CACHE);
+  const [allPatientsList, setAllPatientsList] = useState<any[]>(GLOBAL_MOBILE_ALLPATIENTS_CACHE);
 
   // 1. Deferred Non-Blocking Background Firestore Sync (InteractionManager runAfterInteractions)
   useEffect(() => {
     let appUnsub: (() => void) | undefined;
     let patUnsub: (() => void) | undefined;
+    let allPatUnsub: (() => void) | undefined;
 
     const task = InteractionManager.runAfterInteractions(() => {
       try {
@@ -394,6 +554,17 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
           GLOBAL_MOBILE_PATIENTS_CACHE = list;
           setPatientsList(list);
         }, () => { });
+
+        const allPatColRef = collection(db, 'allpatients');
+        const qAllPat = query(allPatColRef, limit(300));
+        allPatUnsub = onSnapshot(qAllPat, (snapshot) => {
+          const list: any[] = [];
+          snapshot.forEach((snap) => {
+            list.push({ id: snap.id, ...snap.data() });
+          });
+          GLOBAL_MOBILE_ALLPATIENTS_CACHE = list;
+          setAllPatientsList(list);
+        }, () => { });
       } catch (e) { }
     });
 
@@ -401,11 +572,13 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
       task.cancel();
       if (appUnsub) appUnsub();
       if (patUnsub) patUnsub();
+      if (allPatUnsub) allPatUnsub();
     };
   }, [currentBranch]);
 
   // Deduplicated Patient History Database
   interface PatientRecordItem {
+    id: string;
     name: string;
     phone: string;
     email: string;
@@ -428,25 +601,57 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
       if (!item || results.length >= 10) return true;
       const name = (item.patientName || item.name || item.fullName || item.userName || item.patient_name || item.displayName || '').trim();
       const phone = (item.phoneNumber || item.phone || item.mobile || item.mobileNumber || item.contact || item.contactNumber || item.phone_number || '').trim();
-      if (!name && !phone) return false;
+
+      const explicitId = (
+        item.registrationId ||
+        item.registration_id ||
+        item.patientId ||
+        item.patient_id ||
+        item.uhid ||
+        item.UHID ||
+        item.patientCode ||
+        item.patient_code ||
+        item.mrn ||
+        item.MRN ||
+        item.pid ||
+        item.pId ||
+        item.PID ||
+        item.patientNo ||
+        item.patient_no ||
+        item.regNo ||
+        item.registrationNo ||
+        ''
+      ).toString().trim();
+
+      const phoneClean = phone.replace(/\D/g, '');
+      const fallbackId = phoneClean.length >= 4
+        ? `REG-${phoneClean.slice(-4)}`
+        : (item.id && typeof item.id === 'string' && item.id.length >= 4
+          ? `REG-${item.id.slice(-4).toUpperCase()}`
+          : 'REG-1001');
+
+      const id = explicitId || fallbackId;
+
+      if (!name && !phone && !id) return false;
 
       const nameLower = name.toLowerCase();
       const phoneLower = phone.toLowerCase();
-      const key = `${phoneLower}_${nameLower}`;
+      const idLower = id.toLowerCase();
+      const key = `${phoneLower}_${nameLower}_${idLower}`;
 
       if (visited.has(key)) return false;
       visited.add(key);
 
       const matches = isDigits
-        ? (phoneLower.includes(term) || nameLower.includes(term))
-        : (nameLower.includes(term) || phoneLower.includes(term));
+        ? (phoneLower.includes(term) || nameLower.includes(term) || idLower.includes(term))
+        : (nameLower.includes(term) || phoneLower.includes(term) || idLower.includes(term));
 
       if (matches) {
         const email = (item.emailAddress || item.email || item.email_address || item.userEmail || '').trim();
         const diseases = (item.diseases || item.symptoms || item.disease || item.illness || item.problem || item.chiefComplaints || item.notes || '').trim();
         const branch = (item.branch || item.assignedBranch || item.branchName || item.location || '').trim();
 
-        results.push({ name, phone, email, diseases, branch, nameLower, phoneLower });
+        results.push({ id, name, phone, email, diseases, branch, nameLower, phoneLower });
         if (results.length >= 10) return true;
       }
       return false;
@@ -456,19 +661,33 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
       if (checkAndAdd(patientsList[i])) break;
     }
     if (results.length < 10) {
+      for (let i = 0; i < allPatientsList.length; i++) {
+        if (checkAndAdd(allPatientsList[i])) break;
+      }
+    }
+    if (results.length < 10) {
       for (let i = 0; i < existingAppointments.length; i++) {
         if (checkAndAdd(existingAppointments[i])) break;
       }
     }
 
     return results;
-  }, [debouncedSearchTerm, patientsList, existingAppointments]);
+  }, [debouncedSearchTerm, patientsList, allPatientsList, existingAppointments]);
 
   const handleSelectPatientSuggestion = (item: PatientRecordItem) => {
     setPatientName(item.name || '');
     setPhoneNumber(item.phone || '');
     setEmailAddress(item.email || '');
     setDiseases(item.diseases || '');
+    setMarketingSource('Old Patient');
+    setPatientData(prev => ({
+      ...prev,
+      patientId: item.id,
+      fullName: item.name,
+      patientName: item.name,
+      phone: item.phone,
+      source: 'Old Patient'
+    }));
     setPatientSearchTerm(item.name || item.phone || '');
     setDebouncedSearchTerm('');
     setShowSuggestions(false);
@@ -780,8 +999,8 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
   };
 
   // Calendar State: Month & Year switching
-  const [calMonth, setCalMonth] = useState(8); // 0 = Jan, 8 = Sep
-  const [calYear, setCalYear] = useState(2026);
+  const [calMonth, setCalMonth] = useState(() => new Date().getMonth());
+  const [calYear, setCalYear] = useState(() => new Date().getFullYear());
 
   // Dropdown & Modal States
   const [marketingExpanded, setMarketingExpanded] = useState(false);
@@ -844,22 +1063,40 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
 
     setIsSubmitting(true);
     try {
-      await createDocument('appointments', {
+      let generatedRegId = patientData.regID || patientData.patientId;
+      if (!generatedRegId || typeof generatedRegId !== 'string' || generatedRegId.trim().length === 0 || /^[a-zA-Z0-9]{19,32}$/.test(generatedRegId.trim())) {
+        generatedRegId = await generateRegistrationId(currentBranch);
+      }
+
+      const appPayload = {
+        registrationId: generatedRegId,
         patientName,
+        fullName: patientName,
         diseases,
+        phone: phoneNumber,
         phoneNumber,
         emailAddress,
-        marketingSource,
+        marketingSource: (patientData.source === 'Old Patient' || marketingSource === 'Old Patient') ? 'Old Patient' : marketingSource,
         consultationMode,
         branch: currentBranch,
+        branchName: currentBranch,
         doctorName: selectedDoctor,
         appointmentDate,
         appointmentTime: selectedTimeSlot || '10:00 AM',
-        status: 'scheduled',
+        status: 'waiting',
         createdAt: new Date().toISOString(),
-      });
+        updatedAt: new Date().toISOString()
+      };
 
-      Alert.alert('Success', `Appointment Booked Successfully for ${patientName}!`);
+      await addDoc(collection(db, 'appointments'), appPayload);
+      try {
+        await addDoc(collection(db, 'allpatients'), appPayload);
+      } catch (e) {}
+      try {
+        await addDoc(collection(db, 'patients'), appPayload);
+      } catch (e) {}
+
+      Alert.alert('Success', `Appointment Booked Successfully for ${patientName}!\nRegistration ID: ${generatedRegId}`);
 
       // Complete Form & Search Reset to eliminate post-booking lag
       setPatientName('');
@@ -917,27 +1154,21 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
           <View style={styles.cardHeaderLine} />
         </View>
 
-        {/* DEDICATED PROMINENT PATIENT SEARCH BAR FOR MOBILE */}
-        <View style={{ position: 'relative', marginBottom: 16, zIndex: 999 }}>
-          <Text style={{ fontSize: 11, fontWeight: '800', color: '#258ec8', marginBottom: 6 }}>
-            🔎 Search Existing Patient (Type 2+ letters or phone digits)
-          </Text>
-          <View
-            style={{
-              backgroundColor: '#f8fafc',
-              borderWidth: 2,
-              borderColor: '#258ec8',
-              borderRadius: 12,
-              paddingHorizontal: 12,
-              height: 48,
-              flexDirection: 'row',
-              alignItems: 'center',
-            }}
-          >
-            <Feather name="search" size={18} color="#258ec8" style={{ marginRight: 8 }} />
+        {/* Global Search Bar */}
+        <View style={{ 
+          marginBottom: 16, 
+          borderRadius: 24, 
+          elevation: 0, 
+          borderWidth: 1, 
+          borderColor: '#e2e8f0', 
+          backgroundColor: '#fff',
+          zIndex: 999 
+        }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, height: 48 }}>
+            <Feather name="search" size={20} color="#94a3b8" />
             <TextInput
-              style={{ flex: 1, fontSize: 13, color: '#0f172a', fontWeight: '600' }}
-              placeholder="Search patient by Name or Mobile..."
+              style={{ flex: 1, marginLeft: 12, fontSize: 14, color: '#000000' }}
+              placeholder="Search global patients by name, phone, or reg ID..."
               placeholderTextColor="#94a3b8"
               value={patientSearchTerm}
               onFocus={() => {
@@ -946,28 +1177,77 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
               }}
               onChangeText={handleSearchChange}
             />
-            {patientSearchTerm ? (
-              <TouchableOpacity
-                onPress={() => {
-                  setPatientSearchTerm('');
-                  setDebouncedSearchTerm('');
-                  setShowSuggestions(false);
-                }}
-                style={{ padding: 4 }}
-              >
-                <Feather name="x" size={16} color="#64748b" />
+            {patientSearchTerm.length > 0 && (
+              <TouchableOpacity onPress={() => { setPatientSearchTerm(''); setDebouncedSearchTerm(''); setShowSuggestions(false); }}>
+                <Feather name="x" size={20} color="#94a3b8" />
               </TouchableOpacity>
-            ) : null}
+            )}
           </View>
-
-          {/* FLOATING RECOMMENDATION DROPDOWN FOR MOBILE SEARCH BAR */}
-          {showSuggestions && debouncedSearchTerm.trim().length >= 2 && patientSuggestions.length > 0 && (
-            <PatientSuggestionsDropdown
-              suggestions={patientSuggestions}
-              onSelect={handleSelectPatientSuggestion}
-            />
-          )}
         </View>
+
+        {/* Search Results Dropdown */}
+        {showSuggestions && debouncedSearchTerm.trim().length >= 2 && patientSuggestions.length > 0 && (
+          <View style={{ 
+            marginBottom: 16, 
+            borderRadius: 12, 
+            elevation: 0, 
+            borderWidth: 1, 
+            borderColor: '#e2e8f0', 
+            backgroundColor: '#fff', 
+            maxHeight: 250,
+            zIndex: 9999
+          }}>
+            <ScrollView 
+              keyboardShouldPersistTaps="handled" 
+              showsVerticalScrollIndicator={true} 
+              persistentScrollbar={true} 
+              indicatorStyle="black" 
+              nestedScrollEnabled={true}
+            >
+              {patientSuggestions.map((patient, index) => (
+                <TouchableOpacity
+                  key={patient.id || index}
+                  style={{ 
+                    padding: 12, 
+                    borderBottomWidth: index === patientSuggestions.length - 1 ? 0 : 1, 
+                    borderBottomColor: '#f1f5f9', 
+                    flexDirection: 'row', 
+                    alignItems: 'center' 
+                  }}
+                  onPress={() => handleSelectPatientSuggestion(patient)}
+                >
+                  {/* Avatar Circle */}
+                  <View
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 18,
+                      backgroundColor: '#e0f2fe',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    <Text style={{ color: '#0ea5e9', fontSize: 12, fontWeight: 'bold' }}>
+                      {(patient.name || patient.fullName || 'P').substring(0, 2).toUpperCase()}
+                    </Text>
+                  </View>
+                  
+                  {/* Patient Details */}
+                  <View style={{ marginLeft: 12, flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Text style={{ fontWeight: '600', color: '#1e293b', fontSize: 14 }}>
+                        {patient.name || patient.fullName}
+                      </Text>
+                    </View>
+                    <Text style={{ color: '#64748b', fontSize: 12, marginTop: 2 }}>
+                      {patient.id || 'N/A'} • {patient.phone} • {patient.branch || 'Unknown Branch'}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
 
         {/* 2-Column Inputs: Patient Name & Diseases */}
         <View style={[styles.rowTwoCol, { zIndex: 500 }]}>
@@ -1008,22 +1288,29 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
         {/* 2-Column Inputs: Phone (+91) & Email Address */}
         <View style={styles.rowTwoCol}>
           <View style={styles.colField}>
-            <Text style={styles.fieldLabel}>Phone (+91)</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+              <Text style={styles.fieldLabel}>Phone (+91)</Text>
+              {(patientData.phone || phoneNumber).replace(/\D/g, '').length >= 10 && (
+                <TouchableOpacity
+                  onPress={() => handleManualPhoneCheck(patientData.phone || phoneNumber)}
+                  disabled={checkingProfilesLoading}
+                >
+                  {checkingProfilesLoading ? (
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#94a3b8' }}>Checking...</Text>
+                  ) : (
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: COLORS.secondary }}>Check Profiles</Text>
+                  )}
+                </TouchableOpacity>
+              )}
+            </View>
             <View style={styles.inputBox}>
               <TextInput
                 style={styles.inputText}
                 placeholder="Phone"
                 placeholderTextColor="#94a3b8"
                 keyboardType="phone-pad"
-                value={phoneNumber}
-                onFocus={() => {
-                  if (phoneNumber) setDebouncedSearchTerm(phoneNumber);
-                  setShowSuggestions(true);
-                }}
-                onChangeText={(val) => {
-                  setPhoneNumber(val);
-                  handleSearchChange(val);
-                }}
+                value={patientData.phone || phoneNumber}
+                onChangeText={handlePhoneInputChange}
               />
             </View>
           </View>
@@ -1050,22 +1337,31 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
           {/* Marketing Source Dropdown */}
           <View style={[styles.colField, { zIndex: marketingExpanded ? 300 : 1 }]}>
             <Text style={styles.fieldLabel}>Marketing Source</Text>
-            <TouchableOpacity
-              style={styles.dropdownBox}
-              onPress={() => {
-                setModeExpanded(false);
-                setMarketingExpanded(!marketingExpanded);
-              }}
-              activeOpacity={0.8}
-            >
-              <MaterialCommunityIcons name="bullhorn-outline" size={16} color="#94a3b8" style={{ marginRight: 6 }} />
-              <Text style={[styles.dropdownValueText, marketingSource === 'Select Source' && { color: '#94a3b8' }]} numberOfLines={1}>
-                {marketingSource === 'Select Source' ? 'Select' : marketingSource}
-              </Text>
-              <Feather name="chevron-down" size={16} color="#94a3b8" style={{ marginLeft: 'auto' }} />
-            </TouchableOpacity>
+            {marketingSource === 'Old Patient' || patientData.source === 'Old Patient' ? (
+              <View style={[styles.dropdownBox, { backgroundColor: '#f8fafc', borderColor: '#cbd5e1' }]}>
+                <MaterialCommunityIcons name="bullhorn-outline" size={16} color="#64748b" style={{ marginRight: 6 }} />
+                <Text style={[styles.dropdownValueText, { color: '#0f172a', fontWeight: '700' }]} numberOfLines={1}>
+                  Old Patient
+                </Text>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={styles.dropdownBox}
+                onPress={() => {
+                  setModeExpanded(false);
+                  setMarketingExpanded(!marketingExpanded);
+                }}
+                activeOpacity={0.8}
+              >
+                <MaterialCommunityIcons name="bullhorn-outline" size={16} color="#94a3b8" style={{ marginRight: 6 }} />
+                <Text style={[styles.dropdownValueText, marketingSource === 'Select Source' && { color: '#94a3b8' }]} numberOfLines={1}>
+                  {marketingSource === 'Select Source' ? 'Select' : marketingSource}
+                </Text>
+                <Feather name="chevron-down" size={16} color="#94a3b8" style={{ marginLeft: 'auto' }} />
+              </TouchableOpacity>
+            )}
 
-            {marketingExpanded && (
+            {!(marketingSource === 'Old Patient' || patientData.source === 'Old Patient') && marketingExpanded && (
               <View
                 style={[styles.floatingMenu, { height: 320 }]}
                 onStartShouldSetResponder={() => true}
@@ -1362,7 +1658,90 @@ export const BookAppointmentScreen: React.FC<BookAppointmentScreenProps> = ({
         </TouchableOpacity>
       </Modal>
 
+      {/* START EXISTING PROFILES MODAL */}
+      <Modal
+        visible={existingProfilesModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setExistingProfilesModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setExistingProfilesModalVisible(false)}
+        >
+          <TouchableOpacity activeOpacity={1} style={styles.modalCard} onPress={(e) => e.stopPropagation()}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <View>
+                <Text style={{ fontSize: 16, fontWeight: '700', color: '#0f172a' }}>
+                  Existing Profiles Found ({existingProfilesList.length})
+                </Text>
+                <Text style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+                  Phone: +91 {checkedPhone}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setExistingProfilesModalVisible(false)}>
+                <Ionicons name="close" size={24} color="#64748b" />
+              </TouchableOpacity>
+            </View>
 
+            <ScrollView style={{ maxHeight: 300, marginBottom: 16 }} nestedScrollEnabled>
+              {existingProfilesList.map((prof, index) => (
+                <TouchableOpacity
+                  key={prof.id || index}
+                  style={{
+                    backgroundColor: '#f8fafc',
+                    borderWidth: 1,
+                    borderColor: '#e2e8f0',
+                    borderRadius: 10,
+                    padding: 12,
+                    marginBottom: 8,
+                    flexDirection: 'row',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}
+                  onPress={() => handleSelectExistingProfile(prof)}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#0f172a' }}>
+                      {prof.fullName}
+                    </Text>
+                    <Text style={{ fontSize: 12, color: '#0284c7', marginTop: 2 }}>
+                      Reg ID: {prof.registrationId}
+                    </Text>
+                    {!!prof.gender || !!prof.age ? (
+                      <Text style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
+                        {[prof.gender, prof.age ? `${prof.age} YRS` : ''].filter(Boolean).join(' • ')}
+                      </Text>
+                    ) : null}
+                  </View>
+                  <View style={{ backgroundColor: '#e0f2fe', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6 }}>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#0284c7' }}>Select</Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8 }}>
+              <TouchableOpacity
+                style={{
+                  backgroundColor: '#f1f5f9',
+                  paddingVertical: 10,
+                  paddingHorizontal: 16,
+                  borderRadius: 8
+                }}
+                onPress={() => {
+                  setBypassPhoneCheck(true);
+                  setExistingProfilesModalVisible(false);
+                }}
+              >
+                <Text style={{ color: '#475569', fontWeight: '700', fontSize: 13 }}>Create New Patient</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+      {/* END EXISTING PROFILES MODAL */}
 
     </ScrollView>
   );
@@ -1702,6 +2081,25 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontWeight: '800',
   },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
+  },
 });
 
 interface SlotButtonProps {
@@ -1914,6 +2312,13 @@ const PatientSuggestionRow = React.memo<PatientSuggestionRowProps>(({ item, isLa
         <Text style={{ fontSize: 13.5, fontWeight: '700', color: '#0f172a' }}>
           {item.name || 'Unnamed Patient'}
         </Text>
+        {item.id ? (
+          <View style={{ backgroundColor: '#e0f2fe', borderWidth: 1, borderColor: '#bae6fd', paddingHorizontal: 6, paddingVertical: 1.5, borderRadius: 6 }}>
+            <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#0284c7' }}>
+              🆔 {item.id}
+            </Text>
+          </View>
+        ) : null}
         {item.branch ? (
           <View style={{ backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', paddingHorizontal: 6, paddingVertical: 1.5, borderRadius: 6 }}>
             <Text style={{ fontSize: 9.5, fontWeight: '600', color: '#475569' }}>
@@ -1960,8 +2365,8 @@ const PatientSuggestionsDropdown = React.memo<PatientSuggestionsDropdownProps>((
       style={{
         position: 'absolute',
         top: 76,
-        left: 0,
-        right: 0,
+        left: -8,
+        right: -8,
         backgroundColor: '#ffffff',
         borderWidth: 1,
         borderColor: '#cbd5e1',
@@ -1972,7 +2377,7 @@ const PatientSuggestionsDropdown = React.memo<PatientSuggestionsDropdownProps>((
         shadowRadius: 18,
         elevation: 18,
         zIndex: 9999,
-        maxHeight: 320,
+        maxHeight: 340,
         overflow: 'hidden',
       }}
     >

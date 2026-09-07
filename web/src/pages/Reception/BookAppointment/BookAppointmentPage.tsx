@@ -5,9 +5,11 @@ import {
   ChevronLeft, ChevronRight, X, Building2, Lock, Search
 } from 'lucide-react';
 import { createDocument, db } from '@app/shared';
-import { collection, onSnapshot, addDoc, deleteDoc, doc } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, deleteDoc, doc, query, where, limit, getDocs } from 'firebase/firestore';
+import { generateRegistrationId, getBranchShortcut } from '../../../utils/idGenerator';
 
 let GLOBAL_WEB_PATIENTS_CACHE: any[] = [];
+let GLOBAL_WEB_ALLPATIENTS_CACHE: any[] = [];
 let GLOBAL_WEB_APPTS_CACHE: any[] = [];
 const WEB_PATIENTS_CACHE_KEY = '@sph_web_patients_cache_v2';
 const WEB_APPTS_CACHE_KEY = '@sph_web_appts_cache_v2';
@@ -238,8 +240,158 @@ export const BookAppointmentPage: React.FC<BookAppointmentPageProps> = ({
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [activeSearchQuery, setActiveSearchQuery] = useState('');
 
+  // START STATE FOR PROFILE LOOKUP
+  const [patientData, setPatientData] = useState({ phone: '', fullName: '', patientName: '', patientId: '', regID: '', source: '' });
+  const [existingProfilesList, setExistingProfilesList] = useState<any[]>([]);
+  const [checkedPhone, setCheckedPhone] = useState('');
+  const [bypassPhoneCheck, setBypassPhoneCheck] = useState(false);
+  const [phoneCheckResult, setPhoneCheckResult] = useState<any>(null);
+  const [checkingProfilesLoading, setCheckingProfilesLoading] = useState(false);
+  const [existingProfilesModalVisible, setExistingProfilesModalVisible] = useState(false);
+  // END STATE
+
+  // START PROFILE FETCH BY PHONE
+  const findProfilesByPhone = async (rawPhone: string) => {
+    if (!rawPhone) return [];
+    const clean = String(rawPhone).replace(/\D/g, '').slice(-10);
+    if (clean.length < 10) return [];
+
+    const profilesMap = new Map();
+
+    const processDoc = (data: any, docId: string) => {
+      if (!data) return;
+      const pName = data.fullName || data.patientName || data.name || data.patient_name;
+      const docPhone = data.phone || data.patientPhone || data.phoneNumber || data.mobile || data.contact || data.contactNumber || '';
+      const cleanDocPhone = String(docPhone).replace(/\D/g, '').slice(-10);
+      if (pName && cleanDocPhone === clean) {
+        const rawReg = data.registrationId || data.registration_id || data.regId || data.regID || data.patientId || data.uhid;
+        let regId = '';
+        if (rawReg && typeof rawReg === 'string' && rawReg.trim().length > 0 && rawReg.trim().length <= 18 && !/^[a-zA-Z0-9]{19,32}$/.test(rawReg.trim())) {
+          regId = rawReg.trim().toUpperCase();
+        } else {
+          const shortcut = getBranchShortcut(data.branchName || data.branch || currentBranch);
+          regId = `SPH-${shortcut}-${String(profilesMap.size + 1).padStart(4, '0')}`;
+        }
+
+        const key = `${pName.toLowerCase()}_${cleanDocPhone}_${regId.toLowerCase()}`;
+        if (!profilesMap.has(key)) {
+          profilesMap.set(key, {
+            id: docId,
+            fullName: pName,
+            registrationId: regId,
+            phone: docPhone || clean,
+            gender: data.gender || '',
+            age: data.age || '',
+            source: data.source || 'Old Patient',
+            branchName: data.branchName || data.branch || ''
+          });
+        }
+      }
+    };
+
+    // 1. Search in-memory state & cache instantly (0ms)
+    try {
+      (allPatientsList || []).forEach(p => processDoc(p, p?.id));
+      (patientsList || []).forEach(p => processDoc(p, p?.id));
+      (existingAppointments || []).forEach(a => processDoc(a, a?.id));
+      (GLOBAL_WEB_ALLPATIENTS_CACHE || []).forEach(p => processDoc(p, p?.id));
+      (GLOBAL_WEB_PATIENTS_CACHE || []).forEach(p => processDoc(p, p?.id));
+    } catch (e) {}
+
+    // 2. Query Firestore collections with a 1.5s max timeout safety
+    const safeQuery = (q: any) => Promise.race([
+      getDocs(q).catch(() => ({ docs: [] })),
+      new Promise(res => setTimeout(() => res({ docs: [] }), 1500))
+    ]);
+
+    try {
+      const [snapAll, snapPatients, snapAppts, snapProfiles] = await Promise.all([
+        safeQuery(query(collection(db, 'allpatients'), where('phone', '==', clean), limit(20))),
+        safeQuery(query(collection(db, 'patients'), where('phone', '==', clean), limit(20))),
+        safeQuery(query(collection(db, 'appointments'), where('phone', '==', clean), limit(20))),
+        safeQuery(query(collection(db, 'patient_profiles'), where('phone', '==', clean), limit(20)))
+      ]);
+
+      [snapAll, snapPatients, snapAppts, snapProfiles].forEach((snap: any) => {
+        if (!snap || snap.empty || !snap.forEach) return;
+        snap.forEach((docSnap: any) => {
+          processDoc(docSnap.data(), docSnap.id);
+        });
+      });
+    } catch (err) {
+      console.warn("Firestore phone query error:", err);
+    }
+
+    const resultList = Array.from(profilesMap.values());
+    setPhoneCheckResult(resultList);
+    return resultList;
+  };
+  // END PROFILE FETCH BY PHONE
+
+  // START PHONE HANDLERS AND PROFILE SELECTION
+  const handleManualPhoneCheck = async (phoneVal: string) => {
+    const clean = phoneVal.replace(/\D/g, '').slice(-10);
+    if (clean.length < 10) {
+      alert("Invalid Phone: Please enter a 10-digit mobile number.");
+      return;
+    }
+    setCheckingProfilesLoading(true);
+    try {
+      const list = await findProfilesByPhone(phoneVal);
+      if (list.length > 0) {
+        setExistingProfilesList(list);
+        setCheckedPhone(clean);
+        setExistingProfilesModalVisible(true);
+      } else {
+        alert(`No existing patient profiles found for +91 ${clean}.`);
+      }
+    } catch (err) {
+      console.error("Manual check error:", err);
+    } finally {
+      setCheckingProfilesLoading(false);
+    }
+  };
+
+  // Automatically triggers profile check when user enters 10 digits
+  const handlePhoneInputChange = (text: string) => {
+    setPhoneNumber(text);
+    setPatientData(prev => ({ ...prev, phone: text }));
+    setBypassPhoneCheck(false);
+    
+    const clean = text.replace(/\D/g, '').slice(-10);
+    if (clean.length === 10) {
+      handleManualPhoneCheck(text);
+    }
+  };
+
+  // Populate appointment form when user selects an existing profile
+  const handleSelectExistingProfile = (prof: any) => {
+    setPatientName(prof.fullName);
+    setPhoneNumber(prof.phone || (patientData.phone || phoneNumber));
+    setMarketingSource('Old Patient');
+    setPatientData(prev => ({
+      ...prev,
+      patientId: prof.id,
+      fullName: prof.fullName,
+      patientName: prof.fullName,
+      regID: prof.registrationId || prev.regID,
+      source: 'Old Patient'
+    }));
+    setBypassPhoneCheck(true);
+    setExistingProfilesModalVisible(false);
+  };
+  // END HANDLERS
+
   // Section 2: Appointment Information
-  const [appointmentDate, setAppointmentDate] = useState('01-09-2026');
+  const getTodayFormatted = () => {
+    const today = new Date();
+    const d = String(today.getDate()).padStart(2, '0');
+    const m = String(today.getMonth() + 1).padStart(2, '0');
+    const y = today.getFullYear();
+    return `${d}-${m}-${y}`;
+  };
+
+  const [appointmentDate, setAppointmentDate] = useState(getTodayFormatted);
   const [selectedDoctor, setSelectedDoctor] = useState('');
   const [selectedTimeSlot, setSelectedTimeSlot] = useState('');
 
@@ -333,9 +485,10 @@ export const BookAppointmentPage: React.FC<BookAppointmentPageProps> = ({
     }
   }, [appointmentDate, currentBranch, availableDoctors]);
 
-  // Firestore Live Patient History Collections (appointments & patients) with 0ms Instant Device Cache
+  // Firestore Live Patient History Collections (appointments, patients & allpatients) with 0ms Instant Device Cache
   const [existingAppointments, setExistingAppointments] = useState<any[]>(GLOBAL_WEB_APPTS_CACHE);
   const [patientsList, setPatientsList] = useState<any[]>(GLOBAL_WEB_PATIENTS_CACHE);
+  const [allPatientsList, setAllPatientsList] = useState<any[]>(GLOBAL_WEB_ALLPATIENTS_CACHE);
 
   useEffect(() => {
     try {
@@ -367,8 +520,24 @@ export const BookAppointmentPage: React.FC<BookAppointmentPageProps> = ({
     } catch (e) { }
   }, []);
 
+  useEffect(() => {
+    try {
+      const allPatColRef = collection(db, 'allpatients');
+      const unsubscribe = onSnapshot(allPatColRef, (snapshot) => {
+        const list: any[] = [];
+        snapshot.forEach((snap) => {
+          list.push({ id: snap.id, ...snap.data() });
+        });
+        GLOBAL_WEB_ALLPATIENTS_CACHE = list;
+        setAllPatientsList(list);
+      }, () => { });
+      return () => unsubscribe();
+    } catch (e) { }
+  }, []);
+
   // Deduplicated Patient History Database
   interface PatientRecordItem {
+    id: string;
     name: string;
     phone: string;
     email: string;
@@ -391,25 +560,57 @@ export const BookAppointmentPage: React.FC<BookAppointmentPageProps> = ({
       if (!item || results.length >= 10) return true;
       const name = (item.patientName || item.name || item.fullName || item.userName || item.patient_name || item.displayName || '').trim();
       const phone = (item.phoneNumber || item.phone || item.mobile || item.mobileNumber || item.contact || item.contactNumber || item.phone_number || '').trim();
-      if (!name && !phone) return false;
+
+      const explicitId = (
+        item.registrationId ||
+        item.registration_id ||
+        item.patientId ||
+        item.patient_id ||
+        item.uhid ||
+        item.UHID ||
+        item.patientCode ||
+        item.patient_code ||
+        item.mrn ||
+        item.MRN ||
+        item.pid ||
+        item.pId ||
+        item.PID ||
+        item.patientNo ||
+        item.patient_no ||
+        item.regNo ||
+        item.registrationNo ||
+        ''
+      ).toString().trim();
+
+      const phoneClean = phone.replace(/\D/g, '');
+      const fallbackId = phoneClean.length >= 4
+        ? `REG-${phoneClean.slice(-4)}`
+        : (item.id && typeof item.id === 'string' && item.id.length >= 4
+          ? `REG-${item.id.slice(-4).toUpperCase()}`
+          : 'REG-1001');
+
+      const id = explicitId || fallbackId;
+
+      if (!name && !phone && !id) return false;
 
       const nameLower = name.toLowerCase();
       const phoneLower = phone.toLowerCase();
-      const key = `${phoneLower}_${nameLower}`;
+      const idLower = id.toLowerCase();
+      const key = `${phoneLower}_${nameLower}_${idLower}`;
 
       if (visited.has(key)) return false;
       visited.add(key);
 
       const matches = isDigits
-        ? (phoneLower.includes(term) || nameLower.includes(term))
-        : (nameLower.includes(term) || phoneLower.includes(term));
+        ? (phoneLower.includes(term) || nameLower.includes(term) || idLower.includes(term))
+        : (nameLower.includes(term) || phoneLower.includes(term) || idLower.includes(term));
 
       if (matches) {
         const email = (item.emailAddress || item.email || item.email_address || item.userEmail || '').trim();
         const diseases = (item.diseases || item.symptoms || item.disease || item.illness || item.problem || item.chiefComplaints || item.notes || '').trim();
         const branch = (item.branch || item.assignedBranch || item.branchName || item.location || '').trim();
 
-        results.push({ name, phone, email, diseases, branch, nameLower, phoneLower });
+        results.push({ id, name, phone, email, diseases, branch, nameLower, phoneLower });
         if (results.length >= 10) return true;
       }
       return false;
@@ -419,19 +620,33 @@ export const BookAppointmentPage: React.FC<BookAppointmentPageProps> = ({
       if (checkAndAdd(patientsList[i])) break;
     }
     if (results.length < 10) {
+      for (let i = 0; i < allPatientsList.length; i++) {
+        if (checkAndAdd(allPatientsList[i])) break;
+      }
+    }
+    if (results.length < 10) {
       for (let i = 0; i < existingAppointments.length; i++) {
         if (checkAndAdd(existingAppointments[i])) break;
       }
     }
 
     return results;
-  }, [activeSearchQuery, patientsList, existingAppointments]);
+  }, [activeSearchQuery, patientsList, allPatientsList, existingAppointments]);
 
   const handleSelectPatientSuggestion = (item: PatientRecordItem) => {
     setPatientName(item.name || '');
     setPhoneNumber(item.phone || '');
     setEmailAddress(item.email || '');
     setDiseases(item.diseases || '');
+    setMarketingSource('Old Patient');
+    setPatientData(prev => ({
+      ...prev,
+      patientId: item.id,
+      fullName: item.name,
+      patientName: item.name,
+      phone: item.phone,
+      source: 'Old Patient'
+    }));
     setPatientSearchTerm(item.name || item.phone || '');
     setActiveSearchQuery('');
     setShowSuggestions(false);
@@ -741,8 +956,8 @@ export const BookAppointmentPage: React.FC<BookAppointmentPageProps> = ({
   };
 
   // Calendar State: Month & Year switching
-  const [calMonth, setCalMonth] = useState(8); // 0 = Jan, 8 = Sep
-  const [calYear, setCalYear] = useState(2026);
+  const [calMonth, setCalMonth] = useState(() => new Date().getMonth());
+  const [calYear, setCalYear] = useState(() => new Date().getFullYear());
   const [calendarModalOpen, setCalendarModalOpen] = useState(false);
 
   const [bookingSuccess, setBookingSuccess] = useState(false);
@@ -799,20 +1014,38 @@ export const BookAppointmentPage: React.FC<BookAppointmentPageProps> = ({
 
     setIsSubmitting(true);
     try {
-      await createDocument('appointments', {
+      let generatedRegId = patientData.regID || patientData.patientId;
+      if (!generatedRegId || typeof generatedRegId !== 'string' || generatedRegId.trim().length === 0 || /^[a-zA-Z0-9]{19,32}$/.test(generatedRegId.trim())) {
+        generatedRegId = await generateRegistrationId(currentBranch);
+      }
+
+      const appPayload = {
+        registrationId: generatedRegId,
         patientName,
+        fullName: patientName,
         diseases,
+        phone: phoneNumber,
         phoneNumber,
         emailAddress,
-        marketingSource,
+        marketingSource: (patientData.source === 'Old Patient' || marketingSource === 'Old Patient') ? 'Old Patient' : marketingSource,
         consultationMode,
         branch: currentBranch,
+        branchName: currentBranch,
         doctorName: selectedDoctor,
         appointmentDate,
         appointmentTime: selectedTimeSlot || '10:00 AM',
-        status: 'scheduled',
+        status: 'waiting',
         createdAt: new Date().toISOString(),
-      });
+        updatedAt: new Date().toISOString()
+      };
+
+      await addDoc(collection(db, 'appointments'), appPayload);
+      try {
+        await addDoc(collection(db, 'allpatients'), appPayload);
+      } catch (e) {}
+      try {
+        await addDoc(collection(db, 'patients'), appPayload);
+      } catch (e) {}
 
       setBookingSuccess(true);
       setTimeout(() => setBookingSuccess(false), 4000);
@@ -957,14 +1190,14 @@ export const BookAppointmentPage: React.FC<BookAppointmentPageProps> = ({
               <div style={{
                 position: 'absolute',
                 top: '84px',
-                left: 0,
-                right: 0,
+                left: '-8px',
+                right: '-8px',
                 background: '#ffffff',
                 border: '1px solid #cbd5e1',
                 borderRadius: '16px',
-                boxShadow: '0 20px 45px -10px rgba(15, 23, 42, 0.2), 0 0 0 1px rgba(15, 23, 42, 0.04)',
+                boxShadow: '0 20px 45px -10px rgba(15, 23, 42, 0.18), 0 0 0 1px rgba(15, 23, 42, 0.04)',
                 zIndex: 9999,
-                maxHeight: '320px',
+                maxHeight: '340px',
                 overflowY: 'auto',
                 overflowX: 'hidden'
               }}>
@@ -1027,6 +1260,11 @@ export const BookAppointmentPage: React.FC<BookAppointmentPageProps> = ({
                       <div style={{ minWidth: 0, flex: 1 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                           <span style={{ fontSize: '14px !important', fontWeight: 700, color: '#0f172a' }}>{item.name || 'Unnamed Patient'}</span>
+                          {item.id && (
+                            <span style={{ background: '#e0f2fe', border: '1px solid #bae6fd', color: '#0284c7', padding: '1px 7px', borderRadius: '6px', fontSize: '10.5px !important', fontWeight: 800 }}>
+                              🆔 {item.id}
+                            </span>
+                          )}
                           {item.branch && (
                             <span style={{ background: '#f8fafc', border: '1px solid #e2e8f0', color: '#475569', padding: '1px 7px', borderRadius: '6px', fontSize: '10.5px !important', fontWeight: 600 }}>
                               📍 {item.branch}
@@ -1122,9 +1360,29 @@ export const BookAppointmentPage: React.FC<BookAppointmentPageProps> = ({
             </div>
 
             <div style={{ position: 'relative' }}>
-              <label style={{ display: 'block', fontSize: '12.5px !important', fontWeight: 700, color: '#1e293b', marginBottom: '8px' }}>
-                Phone Number *
-              </label>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <label style={{ display: 'block', fontSize: '12.5px !important', fontWeight: 700, color: '#1e293b' }}>
+                  Phone (+91) *
+                </label>
+                {(patientData.phone || phoneNumber).replace(/\D/g, '').length >= 10 && (
+                  <button 
+                    type="button"
+                    onClick={() => handleManualPhoneCheck(patientData.phone || phoneNumber)}
+                    disabled={checkingProfilesLoading}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      color: checkingProfilesLoading ? '#94a3b8' : '#0284c7',
+                      padding: 0
+                    }}
+                  >
+                    {checkingProfilesLoading ? 'Checking...' : 'Check Profiles'}
+                  </button>
+                )}
+              </div>
               <div style={{
                 background: '#ffffff',
                 border: '1px solid #cbd5e1',
@@ -1139,17 +1397,8 @@ export const BookAppointmentPage: React.FC<BookAppointmentPageProps> = ({
                 <input
                   type="tel"
                   placeholder="10-digit mobile number"
-                  value={phoneNumber}
-                  onFocus={() => {
-                    setActiveSearchQuery(phoneNumber);
-                    setShowSuggestions(true);
-                  }}
-                  onChange={e => {
-                    const val = e.target.value;
-                    setPhoneNumber(val);
-                    setActiveSearchQuery(val);
-                    setShowSuggestions(true);
-                  }}
+                  value={patientData.phone || phoneNumber}
+                  onChange={e => handlePhoneInputChange(e.target.value)}
                   style={{ border: 'none', outline: 'none', width: '100%', fontSize: '13px !important', color: '#0f172a' }}
                 />
               </div>
@@ -1184,41 +1433,61 @@ export const BookAppointmentPage: React.FC<BookAppointmentPageProps> = ({
               <label style={{ display: 'block', fontSize: '12.5px !important', fontWeight: 700, color: '#1e293b', marginBottom: '8px' }}>
                 Marketing Source
               </label>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    background: '#ffffff',
-                    border: '1px solid #cbd5e1',
-                    borderRadius: '12px',
-                    padding: '0 14px',
-                    height: '48px',
-                    boxSizing: 'border-box',
-                    cursor: 'pointer'
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <Megaphone size={16} color="#94a3b8" />
-                      <span style={{ fontSize: '13px !important', color: marketingSource === 'Select Source' ? '#94a3b8' : '#0f172a', fontWeight: 500 }}>
-                        {marketingSource}
-                      </span>
-                    </div>
-                    <ChevronDown size={18} color="#94a3b8" />
+              {marketingSource === 'Old Patient' || patientData.source === 'Old Patient' ? (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  background: '#f8fafc',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '12px',
+                  padding: '0 14px',
+                  height: '48px',
+                  boxSizing: 'border-box'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <Megaphone size={16} color="#64748b" />
+                    <span style={{ fontSize: '13px !important', color: '#0f172a', fontWeight: 700 }}>
+                      Old Patient
+                    </span>
                   </div>
-                </DropdownMenuTrigger>
+                </div>
+              ) : (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      background: '#ffffff',
+                      border: '1px solid #cbd5e1',
+                      borderRadius: '12px',
+                      padding: '0 14px',
+                      height: '48px',
+                      boxSizing: 'border-box',
+                      cursor: 'pointer'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <Megaphone size={16} color="#94a3b8" />
+                        <span style={{ fontSize: '13px !important', color: marketingSource === 'Select Source' ? '#94a3b8' : '#0f172a', fontWeight: 500 }}>
+                          {marketingSource}
+                        </span>
+                      </div>
+                      <ChevronDown size={18} color="#94a3b8" />
+                    </div>
+                  </DropdownMenuTrigger>
 
-                <DropdownMenuContent>
-                  <DropdownMenuGroup>
-                    <DropdownMenuLabel>Select Marketing Source</DropdownMenuLabel>
-                    <DropdownMenuRadioGroup value={marketingSource} onValueChange={setMarketingSource}>
-                      {marketingSourcesList.map(src => (
-                        <DropdownMenuRadioItem key={src} value={src}>{src}</DropdownMenuRadioItem>
-                      ))}
-                    </DropdownMenuRadioGroup>
-                  </DropdownMenuGroup>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                  <DropdownMenuContent>
+                    <DropdownMenuGroup>
+                      <DropdownMenuLabel>Select Marketing Source</DropdownMenuLabel>
+                      <DropdownMenuRadioGroup value={marketingSource} onValueChange={setMarketingSource}>
+                        {marketingSourcesList.map(src => (
+                          <DropdownMenuRadioItem key={src} value={src}>{src}</DropdownMenuRadioItem>
+                        ))}
+                      </DropdownMenuRadioGroup>
+                    </DropdownMenuGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
             </div>
 
             <div>
@@ -1743,7 +2012,115 @@ export const BookAppointmentPage: React.FC<BookAppointmentPageProps> = ({
         </div>
       )}
 
+      {/* EXISTING PROFILES MODAL */}
+      {existingProfilesModalVisible && (
+        <div
+          onClick={() => setExistingProfilesModalVisible(false)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(15, 23, 42, 0.55)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 99999,
+            padding: '20px'
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: '100%',
+              maxWidth: '440px',
+              background: '#ffffff',
+              borderRadius: '20px',
+              padding: '24px',
+              boxShadow: '0 20px 40px rgba(0, 0, 0, 0.2)'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>
+                  Existing Profiles Found ({existingProfilesList.length})
+                </h3>
+                <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#64748b' }}>
+                  Phone: +91 {checkedPhone}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setExistingProfilesModalVisible(false)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
 
+            <div style={{ maxHeight: '280px', overflowY: 'auto', marginBottom: '16px' }}>
+              {existingProfilesList.map((prof, index) => (
+                <div
+                  key={prof.id || index}
+                  onClick={() => handleSelectExistingProfile(prof)}
+                  style={{
+                    background: '#f8fafc',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '10px',
+                    padding: '12px',
+                    marginBottom: '8px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <div>
+                    <div style={{ fontSize: '14px', fontWeight: 700, color: '#0f172a' }}>
+                      {prof.fullName}
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#0284c7', marginTop: '2px' }}>
+                      Reg ID: {prof.registrationId}
+                    </div>
+                    {(prof.gender || prof.age) && (
+                      <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                        {[prof.gender, prof.age ? `${prof.age} YRS` : ''].filter(Boolean).join(' • ')}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ background: '#e0f2fe', padding: '6px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 700, color: '#0284c7' }}>
+                    Select
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setBypassPhoneCheck(true);
+                  setExistingProfilesModalVisible(false);
+                }}
+                style={{
+                  background: '#f1f5f9',
+                  color: '#475569',
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '10px 16px',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  cursor: 'pointer'
+                }}
+              >
+                Create New Patient
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

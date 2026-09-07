@@ -167,6 +167,18 @@ export default function App() {
       return <AuthScreen onLoginSuccess={handleLoginSuccess} />;
     }
 
+    if (activeTab === 'reception_medicines') {
+      return <MedicineRequestsScreen onNavigate={navigateToTab} onBack={handleGoBack} />;
+    }
+
+    if (activeTab === 'hr') {
+      return <HRScreen />;
+    }
+
+    if (activeTab === 'reception_book') {
+      return <BookAppointmentScreen currentBranch={branchName} onNavigate={navigateToTab} onBack={handleGoBack} />;
+    }
+
     if (userRole === 'admin') {
       return <AdminScreen currentTab={activeTab} />;
     }
@@ -196,14 +208,10 @@ export default function App() {
       case 'reception':
       case 'reception_dashboard':
         return <ReceptionDashboardScreen onNavigate={navigateToTab} />;
-      case 'reception_book':
-        return <BookAppointmentScreen currentBranch={branchName} onNavigate={navigateToTab} onBack={handleGoBack} />;
       case 'reception_patients':
         return <AllPatientsScreen onNavigate={navigateToTab} onBack={handleGoBack} />;
       case 'reception_followups':
         return <FollowUpsScreen onNavigate={navigateToTab} onBack={handleGoBack} />;
-      case 'reception_medicines':
-        return <MedicineRequestsScreen onNavigate={navigateToTab} onBack={handleGoBack} />;
       case 'reception_billing':
         return <ProductBillingScreen onNavigate={navigateToTab} onBack={handleGoBack} />;
       case 'reception_noshow':
@@ -218,14 +226,25 @@ export default function App() {
     }
   };
 
-  // Bottom Nav Items: Dashboard, Book Appt, Patient List, Med Req, Logout
-  const bottomNavItems = [
+  // Admin Bottom Nav Items: Dashboard, Requests, Leaves, Book Appt, Logout
+  const adminBottomNavItems = [
+    { id: 'admin', label: 'Dashboard', iconType: 'ionicons', iconName: 'grid-outline' },
+    { id: 'reception_medicines', label: 'Requests', iconType: 'mci', iconName: 'pill' },
+    { id: 'hr', label: 'Leaves', iconType: 'ionicons', iconName: 'calendar-outline' },
+    { id: 'reception_book', label: 'Book Appt', iconType: 'ionicons', iconName: 'add-circle-outline' },
+    { id: 'logout', label: 'Logout', iconType: 'ionicons', iconName: 'log-out-outline' },
+  ];
+
+  // Reception Bottom Nav Items: Dashboard, Book Appt, Patient List, Med Req, Logout
+  const receptionBottomNavItems = [
     { id: 'reception_dashboard', label: 'Dashboard', iconType: 'ionicons', iconName: 'grid-outline' },
     { id: 'reception_book', label: 'Book Appt', iconType: 'ionicons', iconName: 'calendar-outline' },
     { id: 'reception_patients', label: 'Patient List', iconType: 'ionicons', iconName: 'people-outline' },
     { id: 'reception_medicines', label: 'Med Req', iconType: 'mci', iconName: 'pill' },
     { id: 'logout', label: 'Logout', iconType: 'ionicons', iconName: 'log-out-outline' },
   ];
+
+  const bottomNavItems = userRole === 'admin' ? adminBottomNavItems : receptionBottomNavItems;
 
   const handleBottomTabPress = (id: string) => {
     if (id === 'logout') {
@@ -248,7 +267,7 @@ export default function App() {
       <StatusBar style="dark" />
 
       {/* Top Header Bar - Rendered strictly for Dashboard only */}
-      {!isAuthScreen && userRole !== 'doctor' && (activeTab === 'reception_dashboard' || activeTab === 'reception' || activeTab === 'admin') && (
+      {!isAuthScreen && userRole !== 'doctor' && (activeTab === 'reception_dashboard' || activeTab === 'reception' || activeTab === 'admin' || activeTab === 'analytics') && (
         <View style={styles.topHeader}>
             {/* Left Side: Hamburger Menu + Avatar Circle + Branch/User Info */}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -334,7 +353,9 @@ export default function App() {
       {!isAuthScreen && userRole !== 'doctor' && (
         <View style={styles.fullBottomNavContainer}>
           {bottomNavItems.map((item) => {
-            const isActive = activeTab === item.id || (item.id === 'reception_dashboard' && activeTab === 'reception');
+            const isActive = activeTab === item.id || 
+              (item.id === 'reception_dashboard' && activeTab === 'reception') ||
+              (item.id === 'admin' && (activeTab === 'admin' || activeTab === 'analytics' || activeTab === 'branches' || activeTab === 'doctors' || activeTab === 'staff'));
             const isLogout = item.id === 'logout';
             const iconColor = isLogout ? '#ef4444' : isActive ? '#258ec8' : '#64748b';
 

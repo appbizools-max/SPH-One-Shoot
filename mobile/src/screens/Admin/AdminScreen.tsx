@@ -4,6 +4,7 @@ import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { collection, onSnapshot, addDoc } from 'firebase/firestore';
 import { db } from '@app/shared';
 import { DoctorTimingsScreen } from './DoctorTimings/DoctorTimingsScreen';
+import { ManageBranchesScreen } from './ManageBranches/ManageBranchesScreen';
 
 interface AdminScreenProps {
   currentTab?: string;
@@ -263,8 +264,8 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ currentTab }) => {
           </View>
 
           <View style={[styles.statCard, { borderColor: '#cbd5e1' }]}>
-            <Text style={[styles.statLabel, { color: '#a8ce3a' }]}>NUTRITION REVENUE</Text>
-            <Text style={[styles.statVal, { color: '#a8ce3a' }]}>₹4,85,000</Text>
+            <Text style={[styles.statLabel, { color: '#16a34a' }]}>NUTRITION REVENUE</Text>
+            <Text style={[styles.statVal, { color: '#16a34a' }]}>₹4,85,000</Text>
             <Text style={styles.statSub}>Homeopathic Supplements & Wellness</Text>
           </View>
         </View>
@@ -282,7 +283,7 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ currentTab }) => {
             <View key={p.name} style={styles.card}>
               <Text style={styles.cardTitle}>{p.name}</Text>
               <Text style={{ fontSize: 13, color: '#258ec8', fontWeight: '800', marginTop: 4 }}>Price: {p.price}</Text>
-              <Text style={{ fontSize: 12, color: '#a8ce3a', fontWeight: '700', marginTop: 2 }}>{p.members} Active Package Members</Text>
+              <Text style={{ fontSize: 12, color: '#16a34a', fontWeight: '700', marginTop: 2 }}>{p.members} Active Package Members</Text>
             </View>
           ))}
         </View>
@@ -302,18 +303,7 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ currentTab }) => {
 
       {/* TAB 2: BRANCHES & TARGETS */}
       {activeTab === 'branches' && (
-        <View style={{ gap: 12 }}>
-          {branchesData.map(b => (
-            <View key={b.name} style={styles.card}>
-              <Text style={styles.cardTitle}>{b.name}</Text>
-              <Text style={styles.cardSub}>Contact: {b.phone}</Text>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 }}>
-                <Text style={styles.infoText}>Target: <Text style={{ fontWeight: '800', color: '#258ec8' }}>{b.target}</Text></Text>
-                <Text style={styles.infoText}>Achieved: <Text style={{ fontWeight: '800', color: '#a8ce3a' }}>{b.achieved}</Text></Text>
-              </View>
-            </View>
-          ))}
-        </View>
+        <ManageBranchesScreen />
       )}
 
       {/* TAB 3: GLOBAL PATIENTS */}
@@ -392,7 +382,7 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ currentTab }) => {
                   <View style={{ gap: 4, marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: '#f1f5f9' }}>
                     <Text style={{ fontSize: 11.5, color: '#258ec8', fontWeight: '700' }}>Shift: {s.shift || '10:00 AM - 08:30 PM'}</Text>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Text style={{ fontSize: 11.5, color: '#a8ce3a', fontWeight: '700' }}>Hours: {s.hours}</Text>
+                      <Text style={{ fontSize: 11.5, color: '#16a34a', fontWeight: '700' }}>Hours: {s.hours}</Text>
                       <Text style={{ fontSize: 12, color: '#0f172a', fontWeight: '800' }}>Salary: {s.salary}</Text>
                     </View>
                   </View>
@@ -418,7 +408,7 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ currentTab }) => {
                 <View key={b.branch} style={{ backgroundColor: '#ffffff', padding: 10, borderRadius: 10, marginBottom: 8, borderWidth: 1, borderColor: '#cbd5e1' }}>
                   <Text style={{ fontSize: 13, fontWeight: '800', color: '#0f172a' }}>{b.branch}</Text>
                   <Text style={{ fontSize: 11.5, color: '#258ec8', fontWeight: '700', marginVertical: 2 }}>Contact: +91 {b.phone}</Text>
-                  <Text style={{ fontSize: 11.5, color: '#a8ce3a', fontWeight: '700' }}>Hours: {b.hours}</Text>
+                  <Text style={{ fontSize: 11.5, color: '#16a34a', fontWeight: '700' }}>Hours: {b.hours}</Text>
                 </View>
               ))}
             </View>
@@ -429,7 +419,7 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ currentTab }) => {
             <View style={styles.card}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' }}>
                 <Text style={styles.cardTitle}>Doctors Directory</Text>
-                <Text style={{ fontSize: 11, fontWeight: '700', color: '#a8ce3a' }}>{liveDoctors.length} Doctors</Text>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#16a34a' }}>{liveDoctors.length} Doctors</Text>
               </View>
 
               {liveDoctors.map(doc => {
@@ -438,7 +428,7 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ currentTab }) => {
                   <View key={doc.name} style={{ backgroundColor: '#ffffff', padding: 12, borderRadius: 12, marginBottom: 8, borderWidth: 1, borderColor: '#e2e8f0' }}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                       <Text style={{ fontSize: 13, fontWeight: '800', color: '#0f172a' }}>{doc.name}</Text>
-                      <Text style={{ fontSize: 10.5, fontWeight: '800', color: isHeadDoc ? '#258ec8' : '#a8ce3a', backgroundColor: isHeadDoc ? '#eef5fc' : '#f4f9e8', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                      <Text style={{ fontSize: 10.5, fontWeight: '800', color: isHeadDoc ? '#258ec8' : '#16a34a', backgroundColor: isHeadDoc ? '#eef5fc' : '#f0fdf4', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
                         {doc.role}
                       </Text>
                     </View>
@@ -448,7 +438,7 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({ currentTab }) => {
                       <Text style={{ fontSize: 11, color: isHeadDoc ? '#64748b' : '#258ec8', fontWeight: '700' }}>
                         Shift: {isHeadDoc ? '-' : doc.shift}
                       </Text>
-                      <Text style={{ fontSize: 11, color: isHeadDoc ? '#64748b' : '#a8ce3a', fontWeight: '700' }}>
+                      <Text style={{ fontSize: 11, color: isHeadDoc ? '#64748b' : '#16a34a', fontWeight: '700' }}>
                         Hours: {isHeadDoc ? '-' : doc.hours}
                       </Text>
                       <Text style={{ fontSize: 11.5, color: isHeadDoc ? '#94a3b8' : '#0f172a', fontWeight: '800' }}>

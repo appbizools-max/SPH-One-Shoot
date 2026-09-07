@@ -10,6 +10,7 @@ import { ManageBannersPage } from './ManageBanners/ManageBannersPage';
 import { PackageMembersPage } from './PackageMembers/PackageMembersPage';
 import { PendingPaymentsPage } from './PendingPayments/PendingPaymentsPage';
 import { DoctorTimingsPage } from './DoctorTimings/DoctorTimingsPage';
+import { ManageBranchesPage } from './ManageBranches/ManageBranchesPage';
 
 interface AdminDashboardPageProps {
   currentBranch?: string;
@@ -706,49 +707,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({ currentB
 
         {/* TAB 2: MANAGE BRANCHES & TARGET MANAGEMENT */}
         {activeTab === 'branches' && (
-          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '20px', padding: '22px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <div>
-                <h2 style={{ fontSize: '16px !important', fontWeight: 800, color: '#0f172a' }}>
-                  Branch Management & Target Settings
-                </h2>
-                <p style={{ fontSize: '12px !important', color: '#64748b' }}>
-                  Manage official clinic branches, receptionist contacts, and set monthly revenue targets.
-                </p>
-              </div>
-            </div>
-
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                <thead>
-                  <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                    <th style={{ padding: '12px 14px', fontSize: '12px !important', fontWeight: 800, color: '#475569' }}>BRANCH NAME</th>
-                    <th style={{ padding: '12px 14px', fontSize: '12px !important', fontWeight: 800, color: '#475569' }}>RECEPTIONIST PHONE</th>
-                    <th style={{ padding: '12px 14px', fontSize: '12px !important', fontWeight: 800, color: '#475569' }}>MONTHLY TARGET</th>
-                    <th style={{ padding: '12px 14px', fontSize: '12px !important', fontWeight: 800, color: '#475569' }}>REVENUE ACHIEVED</th>
-                    <th style={{ padding: '12px 14px', fontSize: '12px !important', fontWeight: 800, color: '#475569' }}>ACTIVE PATIENTS</th>
-                    <th style={{ padding: '12px 14px', fontSize: '12px !important', fontWeight: 800, color: '#475569' }}>ACTION</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {branchesList.map(b => (
-                    <tr key={b.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                      <td style={{ padding: '12px 14px', fontSize: '13px !important', fontWeight: 700, color: '#0f172a' }}>{b.name}</td>
-                      <td style={{ padding: '12px 14px', fontSize: '12.5px !important', color: '#334155' }}>{b.phone}</td>
-                      <td style={{ padding: '12px 14px', fontSize: '12.5px !important', fontWeight: 700, color: '#258ec8' }}>{b.target}</td>
-                      <td style={{ padding: '12px 14px', fontSize: '12.5px !important', fontWeight: 700, color: '#16a34a' }}>{b.achieved}</td>
-                      <td style={{ padding: '12px 14px', fontSize: '12.5px !important', color: '#334155' }}>{b.patients} Patients</td>
-                      <td style={{ padding: '12px 14px' }}>
-                        <button style={{ background: '#f1f5f9', border: 'none', padding: '6px 12px', borderRadius: '8px', fontSize: '11.5px !important', fontWeight: 700, cursor: 'pointer', color: '#258ec8' }}>
-                          Edit Target
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <ManageBranchesPage />
         )}
 
         {/* TAB 3: GLOBAL PATIENTS & PACKAGE MEMBERS */}

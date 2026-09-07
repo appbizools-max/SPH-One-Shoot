@@ -1,59 +1,152 @@
 import React, { useState, useEffect } from 'react';
 import {
   ClipboardList, Clock, CreditCard, Search, Calendar, UserPlus, CheckCircle,
-  ArrowRightLeft, UserX, UserCheck, Activity, CheckCircle2, Play, AlertCircle
+  ArrowRightLeft, UserX, UserCheck, Activity, CheckCircle2, Play, AlertCircle, Trash2,
+  ArrowUp, ArrowDown
 } from 'lucide-react';
 import { db } from '@app/shared';
-import { collection, onSnapshot, updateDoc, doc } from 'firebase/firestore';
-
+import { collection, onSnapshot, updateDoc, deleteDoc, doc } from 'firebase/firestore';
+import { TargetProgressWebUI } from '../../../components/TargetProgressWebUI';
 interface ReceptionDashboardPageProps {
   currentBranch?: string;
   onNavigate?: (tab: string) => void;
 }
-
 export const ReceptionDashboardPage: React.FC<ReceptionDashboardPageProps> = ({ currentBranch, onNavigate }) => {
   const [appointments, setAppointments] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'upcoming' | 'active' | 'completed'>('upcoming');
   const [searchTerm, setSearchTerm] = useState('');
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
 
-  // Subscribe live to Firestore appointments collection
+  // Subscribe live to both Firestore appointments & allpatients collections
+  const [branchTarget, setBranchTarget] = useState({
+    monthlyTarget: 1200000,
+    targetReached: 980000,
+    branchName: currentBranch || 'KPHB Branch'
+  });
+
   useEffect(() => {
     try {
-      const colRef = collection(db, 'appointments');
+      const colRef = collection(db, 'branchTargets');
       const unsubscribe = onSnapshot(colRef, (snapshot) => {
+        if (!snapshot.empty) {
+          snapshot.forEach((docSnap) => {
+            const data = docSnap.data();
+            const bName = currentBranch || 'KPHB Branch';
+            if (docSnap.id === 'kphb' || data.branchName === bName || docSnap.id.toLowerCase().includes('kphb')) {
+              setBranchTarget({
+                monthlyTarget: Number(data.monthlyTarget) || 1200000,
+                targetReached: Number(data.targetReached) || 980000,
+                branchName: data.branchName || bName
+              });
+            }
+          });
+        }
+      });
+      return () => unsubscribe();
+    } catch (err) {
+      console.error('Error listening to branch target:', err);
+    }
+  }, [currentBranch]);
+
+  useEffect(() => {
+    let unsubApp: (() => void) | null = null;
+    let unsubPat: (() => void) | null = null;
+    let appsFromAppointments: any[] = [];
+    let appsFromAllPatients: any[] = [];
+
+    const mergeAndSet = () => {
+      const combinedMap = new Map<string, any>();
+      appsFromAppointments.forEach(item => combinedMap.set(item.id, item));
+      appsFromAllPatients.forEach(item => {
+        if (!combinedMap.has(item.id)) {
+          combinedMap.set(item.id, item);
+        }
+      });
+      const list = Array.from(combinedMap.values());
+      list.sort((a, b) => {
+        const dateA = a.appointmentDate || a.date || '';
+        const dateB = b.appointmentDate || b.date || '';
+        return dateB.localeCompare(dateA);
+      });
+      setAppointments(list);
+    };
+
+    try {
+      unsubApp = onSnapshot(collection(db, 'appointments'), (snapshot) => {
         const list: any[] = [];
         snapshot.forEach((snap) => {
-          list.push({ id: snap.id, ...snap.data() });
+          list.push({ id: snap.id, collectionName: 'appointments', ...snap.data() });
         });
-
-        // Sort chronologically by date & time
-        list.sort((a, b) => {
-          const dateA = a.appointmentDate || '';
-          const dateB = b.appointmentDate || '';
-          return dateB.localeCompare(dateA);
-        });
-
-        setAppointments(list);
+        appsFromAppointments = list;
+        mergeAndSet();
       }, (err) => {
         console.warn('Appointments snapshot listener notice:', err);
       });
-      return () => unsubscribe();
     } catch (e) {
       console.warn('Appointments listener setup notice:', e);
     }
+
+    try {
+      unsubPat = onSnapshot(collection(db, 'allpatients'), (snapshot) => {
+        const list: any[] = [];
+        snapshot.forEach((snap) => {
+          const data = snap.data();
+          if (data.appointmentDate || data.date || data.appointmentTime || data.doctor || data.status) {
+            list.push({ id: snap.id, collectionName: 'allpatients', ...data });
+          }
+        });
+        appsFromAllPatients = list;
+        mergeAndSet();
+      }, (err) => {
+        console.warn('Allpatients snapshot listener notice:', err);
+      });
+    } catch (e) {
+      console.warn('Allpatients setup notice:', e);
+    }
+
+    return () => {
+      if (unsubApp) unsubApp();
+      if (unsubPat) unsubPat();
+    };
   }, []);
 
-  // Status update handler
+  // Status update handler (updates both appointments and allpatients)
   const handleUpdateStatus = async (appId: string, newStatus: string) => {
     setActionLoadingId(appId);
     try {
-      await updateDoc(doc(db, 'appointments', appId), {
-        status: newStatus,
-        updatedAt: new Date().toISOString()
-      });
+      try {
+        await updateDoc(doc(db, 'appointments', appId), {
+          status: newStatus,
+          updatedAt: new Date().toISOString()
+        });
+      } catch (e) {
+        await updateDoc(doc(db, 'allpatients', appId), {
+          status: newStatus,
+          updatedAt: new Date().toISOString()
+        });
+      }
     } catch (err) {
       console.error('Failed to update status:', err);
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  // Delete appointment handler
+  const handleDeleteAppointment = async (appId: string, pName: string) => {
+    if (!window.confirm(`Are you sure you want to delete the appointment for ${pName || 'this patient'}?`)) {
+      return;
+    }
+    setActionLoadingId(appId);
+    try {
+      try {
+        await deleteDoc(doc(db, 'appointments', appId));
+      } catch (e) {}
+      try {
+        await deleteDoc(doc(db, 'allpatients', appId));
+      } catch (e) {}
+    } catch (err) {
+      console.error('Failed to delete appointment:', err);
     } finally {
       setActionLoadingId(null);
     }
@@ -70,9 +163,8 @@ export const ReceptionDashboardPage: React.FC<ReceptionDashboardPageProps> = ({ 
   const [selectedDate, setSelectedDate] = useState<string>(getTodayISO());
 
   const isMatchingDate = (a: any) => {
-    const rawDate = a.appointmentDate || a.date || a.bookingDate;
+    const rawDate = a.appointmentDate || a.date || a.bookingDate || a.dateString;
     if (!rawDate) {
-      // If document has no explicit date, show on Today's dashboard
       return selectedDate === getTodayISO();
     }
     const clean = String(rawDate).trim();
@@ -82,12 +174,15 @@ export const ReceptionDashboardPage: React.FC<ReceptionDashboardPageProps> = ({ 
 
     if (clean === selectedDate || clean.startsWith(selectedDate)) return true;
 
-    const parts = selectedDate.split('-');
-    if (parts.length === 3) {
-      const [y, m, d] = parts;
-      const ddmmyyyy = `${d}/${m}/${y}`;
-      const dmy = `${parseInt(d, 10)}/${parseInt(m, 10)}/${y}`;
-      if (clean === ddmmyyyy || clean === dmy) return true;
+    // Support DD-MM-YYYY format matching YYYY-MM-DD
+    const partsISO = selectedDate.split('-'); // [YYYY, MM, DD]
+    if (partsISO.length === 3) {
+      const [y, m, d] = partsISO;
+      const ddmmyyyyHyphen = `${d}-${m}-${y}`;
+      const ddmmyyyySlash = `${d}/${m}/${y}`;
+      const dmySlash = `${parseInt(d, 10)}/${parseInt(m, 10)}/${y}`;
+      const dmyHyphen = `${parseInt(d, 10)}-${parseInt(m, 10)}-${y}`;
+      if (clean === ddmmyyyyHyphen || clean === ddmmyyyySlash || clean === dmySlash || clean === dmyHyphen) return true;
     }
 
     return false;
@@ -96,7 +191,7 @@ export const ReceptionDashboardPage: React.FC<ReceptionDashboardPageProps> = ({ 
   const isMatchingBranch = (a: any) => {
     if (!currentBranch || currentBranch === 'All Branches') return true;
     const appBranch = a.branch || a.targetBranch || a.branchName;
-    if (!appBranch) return true; // Show if document has no explicit branch set
+    if (!appBranch) return true;
     const normAppBranch = String(appBranch).toLowerCase().replace(/\s*branch\s*/i, '').trim();
     const normCurrentBranch = String(currentBranch).toLowerCase().replace(/\s*branch\s*/i, '').trim();
     return normAppBranch.includes(normCurrentBranch) || normCurrentBranch.includes(normAppBranch);
@@ -110,17 +205,49 @@ export const ReceptionDashboardPage: React.FC<ReceptionDashboardPageProps> = ({ 
   // Filter lists for 3 sections (Selected Date & Branch ONLY)
   const upcomingList = filteredBranchDateAppointments.filter(a => {
     const st = (a.status || 'scheduled').toLowerCase().trim();
-    return st === 'scheduled' || st === 'confirmed' || st === 'waiting' || st === 'pending' || (st !== 'in-consultation' && st !== 'active' && st !== 'completed' && st !== 'cancelled');
+    return st === 'scheduled' || st === 'confirmed' || st === 'waiting' || st === 'pending' || st === 'upcoming' || (st !== 'in-consultation' && st !== 'active' && st !== 'completed' && st !== 'done' && st !== 'cancelled');
+  }).sort((a, b) => {
+    if (a.queueOrder !== undefined && b.queueOrder !== undefined) {
+      return a.queueOrder - b.queueOrder;
+    }
+    return 0;
   });
+
+  // Handler for shifting patient queue position (Up / Down) in Firestore
+  const handleShiftQueueOrder = async (patient: any, direction: 'up' | 'down') => {
+    const listIndex = upcomingList.findIndex(item => item.id === patient.id);
+    if (listIndex === -1) return;
+    const targetIndex = direction === 'up' ? listIndex - 1 : listIndex + 1;
+    if (targetIndex < 0 || targetIndex >= upcomingList.length) return;
+    const currentApp = upcomingList[listIndex];
+    const targetApp = upcomingList[targetIndex];
+    try {
+      const currentOrder = currentApp.queueOrder ?? (listIndex + 1);
+      const targetOrder = targetApp.queueOrder ?? (targetIndex + 1);
+      // Swap queue orders in Firestore (appointments & allpatients)
+      try {
+        await updateDoc(doc(db, 'appointments', currentApp.id), { queueOrder: targetOrder, updatedAt: new Date().toISOString() });
+      } catch (e) {
+        await updateDoc(doc(db, 'allpatients', currentApp.id), { queueOrder: targetOrder, updatedAt: new Date().toISOString() });
+      }
+      try {
+        await updateDoc(doc(db, 'appointments', targetApp.id), { queueOrder: currentOrder, updatedAt: new Date().toISOString() });
+      } catch (e) {
+        await updateDoc(doc(db, 'allpatients', targetApp.id), { queueOrder: currentOrder, updatedAt: new Date().toISOString() });
+      }
+    } catch (err) {
+      console.error('Error shifting queue order:', err);
+    }
+  };
 
   const activeList = filteredBranchDateAppointments.filter(a => {
     const st = (a.status || '').toLowerCase().trim();
-    return st === 'in-consultation' || st === 'active' || st === 'consulting';
+    return st === 'in-consultation' || st === 'active' || st === 'consulting' || st === 'in_consultation';
   });
 
   const completedList = filteredBranchDateAppointments.filter(a => {
     const st = (a.status || '').toLowerCase().trim();
-    return st === 'completed' || st === 'concluded' || st === 'finished';
+    return st === 'completed' || st === 'concluded' || st === 'finished' || st === 'done';
   });
 
   // Dynamic statistics for selected date & branch
@@ -157,6 +284,13 @@ export const ReceptionDashboardPage: React.FC<ReceptionDashboardPageProps> = ({ 
 
   return (
     <div style={{ padding: '24px 20px', maxWidth: '1400px', margin: '0 auto' }}>
+      {/* Branch Monthly Target Card */}
+      <TargetProgressWebUI
+        branchName={branchTarget.branchName}
+        monthlyTarget={branchTarget.monthlyTarget}
+        targetReached={branchTarget.targetReached}
+      />
+
       {/* Header Banner */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '14px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -423,15 +557,37 @@ export const ReceptionDashboardPage: React.FC<ReceptionDashboardPageProps> = ({ 
               </tr>
             </thead>
             <tbody>
-              {currentTabAppointments.map((app) => {
+              {currentTabAppointments.map((app, index) => {
                 const isLoading = actionLoadingId === app.id;
                 const status = (app.status || 'scheduled').toLowerCase();
+
+                const rawReg = app.registrationId || app.registration_id || app.regId || app.regID || app.patientId || app.uhid;
+                let cleanRegId = '';
+                if (rawReg && typeof rawReg === 'string' && rawReg.trim().length > 0 && rawReg.trim().length <= 18 && !/^[a-zA-Z0-9]{19,32}$/.test(rawReg.trim())) {
+                  cleanRegId = rawReg.trim().toUpperCase();
+                } else {
+                  const branchStr = (app.branch || app.branchName || 'KPHB').toUpperCase();
+                  let shortcut = 'KPB';
+                  if (branchStr.includes('KPHB') || branchStr === 'KPB') shortcut = 'KPB';
+                  else if (branchStr.includes('CHANDANAGAR') || branchStr === 'CHN') shortcut = 'CHN';
+                  else if (branchStr.includes('NALLAGANDLA') || branchStr === 'NGL') shortcut = 'NGL';
+                  else if (branchStr.includes('DILSHUKNAGAR') || branchStr === 'DIL') shortcut = 'DIL';
+                  else shortcut = branchStr.replace(/[^A-Z]/g, '').substring(0, 3) || 'GEN';
+                  
+                  cleanRegId = `SPH-${shortcut}-${String(index + 1).padStart(4, '0')}`;
+                }
 
                 return (
                   <tr key={app.id} style={{ borderBottom: '1px solid #f8fafc' }}>
                     <td style={{ padding: '12px 8px' }}>
                       <div style={{ fontWeight: 800, color: '#0f172a' }}>{app.patientName || app.name || 'Unnamed Patient'}</div>
-                      <div style={{ fontSize: '11px !important', color: '#64748b', marginTop: '2px' }}>{app.phoneNumber || app.phone || 'No phone'}</div>
+                      <div style={{ fontSize: '11px !important', color: '#64748b', marginTop: '2px' }}>
+                        {activeTab === 'upcoming' ? (
+                          app.phoneNumber || app.phone || 'No phone'
+                        ) : (
+                          <><span style={{ color: '#258ec8', fontWeight: 800 }}>{cleanRegId}</span> • {app.phoneNumber || app.phone || 'No phone'}</>
+                        )}
+                      </div>
                     </td>
                     <td style={{ padding: '12px 8px' }}>
                       <div style={{ fontWeight: 700, color: '#1e293b' }}>{app.doctorName || app.doctor || 'Unassigned'}</div>
@@ -468,13 +624,6 @@ export const ReceptionDashboardPage: React.FC<ReceptionDashboardPageProps> = ({ 
                           ✓ Completed
                         </span>
                       ) : (
-                        <span style={{ background: '#e0f2fe', color: '#0369a1', padding: '4px 10px', borderRadius: '12px', fontSize: '11px !important', fontWeight: 800 }}>
-                          🕒 Scheduled / Waiting
-                        </span>
-                      )}
-                    </td>
-                    <td style={{ padding: '12px 8px', textAlign: 'right' }}>
-                      {activeTab === 'upcoming' && (
                         <button
                           type="button"
                           disabled={isLoading}
@@ -484,7 +633,7 @@ export const ReceptionDashboardPage: React.FC<ReceptionDashboardPageProps> = ({ 
                             color: '#ffffff',
                             border: 'none',
                             padding: '6px 12px',
-                            borderRadius: '8px',
+                            borderRadius: '10px',
                             fontSize: '11px !important',
                             fontWeight: 800,
                             cursor: 'pointer',
@@ -494,9 +643,74 @@ export const ReceptionDashboardPage: React.FC<ReceptionDashboardPageProps> = ({ 
                             boxShadow: '0 2px 6px rgba(37, 142, 200, 0.2)'
                           }}
                         >
-                          <Play size={12} /> Send to Doctor
+                          <Play size={12} /> Start Consultation
                         </button>
                       )}
+                    </td>
+                    <td style={{ padding: '12px 8px', textAlign: 'right' }}>
+                      {/* Upcoming Queue Re-ordering Buttons */}
+                      {activeTab === 'upcoming' && (
+                        <div style={{ display: 'inline-flex', gap: '4px', alignItems: 'center', marginRight: '8px' }}>
+                          <button
+                            type="button"
+                            disabled={index === 0}
+                            onClick={() => handleShiftQueueOrder(app, 'up')}
+                            title="Move Up in Queue"
+                            style={{
+                              background: '#258ec8',
+                              border: '1px solid #1d709e',
+                              borderRadius: '6px',
+                              padding: '5px 7px',
+                              cursor: index === 0 ? 'not-allowed' : 'pointer',
+                              opacity: index === 0 ? 0.3 : 1,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}
+                          >
+                            <ArrowUp size={14} color="#ffffff" />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={index === upcomingList.length - 1}
+                            onClick={() => handleShiftQueueOrder(app, 'down')}
+                            title="Move Down in Queue"
+                            style={{
+                              background: '#258ec8',
+                              border: '1px solid #1d709e',
+                              borderRadius: '6px',
+                              padding: '5px 7px',
+                              cursor: index === upcomingList.length - 1 ? 'not-allowed' : 'pointer',
+                              opacity: index === upcomingList.length - 1 ? 0.3 : 1,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}
+                          >
+                            <ArrowDown size={14} color="#ffffff" />
+                          </button>
+                        </div>
+                      )}
+
+                      <button
+                        type="button"
+                        disabled={isLoading}
+                        onClick={() => handleDeleteAppointment(app.id, app.patientName || app.name)}
+                        title="Delete Appointment"
+                        style={{
+                          background: 'none',
+                          color: '#ef4444',
+                          border: 'none',
+                          padding: '4px',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          marginRight: '6px'
+                        }}
+                      >
+                        <Trash2 size={18} />
+                      </button>
 
                       {activeTab === 'active' && (
                         <button
